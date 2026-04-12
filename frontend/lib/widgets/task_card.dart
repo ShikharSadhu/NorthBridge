@@ -1,0 +1,103 @@
+import 'package:flutter/material.dart';
+import 'package:frontend/core/constants/app_spacing.dart';
+import 'package:frontend/core/utils/date_time_utils.dart';
+import 'package:frontend/models/task_model.dart';
+import 'package:frontend/widgets/app_card.dart';
+
+class TaskCard extends StatelessWidget {
+  const TaskCard({
+    super.key,
+    required this.task,
+    this.onTap,
+  });
+
+  final TaskModel task;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AppCard(
+      onTap: onTap,
+      child: Padding(
+        padding: AppSpacing.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              task.title,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Icon(
+                  Icons.place_outlined,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.xxs),
+                Expanded(
+                  child: Text(
+                    task.location,
+                    style: theme.textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  '\$${task.price.toStringAsFixed(0)}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              task.description,
+              style: theme.textTheme.bodyMedium,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${task.distanceKm.toStringAsFixed(1)} km away',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  formatTaskDate(task.scheduledAt),
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Icon(
+                  Icons.access_time_outlined,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  formatTaskTime(task.scheduledAt),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
