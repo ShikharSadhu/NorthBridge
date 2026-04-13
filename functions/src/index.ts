@@ -30,3 +30,30 @@ setGlobalOptions({ maxInstances: 10 });
 //   logger.info("Hello logs!", {structuredData: true});
 //   response.send("Hello from Firebase!");
 // });
+
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// Create Task API
+export const createTask = onRequest(async (req, res) => {
+  try {
+    const { title, price } = req.body;
+
+    const taskRef = await db.collection("tasks").add({
+      title: title || "Test Task",
+      price: price || 100,
+      status: "open",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(200).send({
+      message: "Task created successfully",
+      taskId: taskRef.id,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error creating task");
+  }
+});
