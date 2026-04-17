@@ -67,15 +67,14 @@ class TaskHistoryScreen extends StatelessWidget {
                 );
               }
 
-              final now = DateTime.now().toUtc();
               final acceptedTasks = taskProvider.tasks
                   .where((task) => task.acceptedByUserId == user.id)
                   .toList(growable: false);
-              final ongoing = acceptedTasks
-                  .where((task) => task.scheduledAt.isAfter(now))
+                final ongoing = acceptedTasks
+                  .where((task) => task.isActive)
                   .toList(growable: false);
-              final past = acceptedTasks
-                  .where((task) => !task.scheduledAt.isAfter(now))
+                final past = acceptedTasks
+                  .where((task) => !task.isActive)
                   .toList(growable: false);
               final totalEarned =
                   past.fold<double>(0, (sum, task) => sum + task.price);

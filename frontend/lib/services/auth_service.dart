@@ -157,4 +157,40 @@ class AuthService {
     _currentUser = updated;
     return _currentUser;
   }
+
+  Future<UserModel?> submitRatingForUser({
+    required String targetUserId,
+    required double rating,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
+    if (rating < 1 || rating > 5) {
+      return null;
+    }
+
+    final userIndex = _userStore.indexWhere((user) => user['id'] == targetUserId);
+    if (userIndex < 0) {
+      return null;
+    }
+
+    final current = UserModel.fromJson(_userStore[userIndex]);
+    final ratedCount = current.tasksDone;
+    final totalScore = current.rating * ratedCount;
+    final updatedRating = (totalScore + rating) / (ratedCount + 1);
+
+    final updated = current.copyWith(
+      rating: updatedRating,
+      tasksDone: ratedCount + 1,
+    );
+
+    final next = List<Map<String, dynamic>>.from(_userStore);
+    next[userIndex] = updated.toJson();
+    _userStore = next;
+
+    if (_currentUser?.id == targetUserId) {
+      _currentUser = updated;
+    }
+
+    return updated;
+  }
 }

@@ -10,6 +10,8 @@ const List<Map<String, dynamic>> taskPreviewApiResponse = [
     'distanceKm': 1.3,
     'scheduledAt': '2026-04-13T18:30:00.000Z',
     'executionMode': 'offline',
+    'isActive': true,
+    'isRatingPending': false,
   },
   {
     'id': '2',
@@ -22,6 +24,8 @@ const List<Map<String, dynamic>> taskPreviewApiResponse = [
     'distanceKm': 2.7,
     'scheduledAt': '2026-04-14T10:00:00.000Z',
     'executionMode': 'offline',
+    'isActive': true,
+    'isRatingPending': false,
   },
   {
     'id': '3',
@@ -34,6 +38,8 @@ const List<Map<String, dynamic>> taskPreviewApiResponse = [
     'distanceKm': 0.9,
     'scheduledAt': '2026-04-12T15:15:00.000Z',
     'executionMode': 'online',
+    'isActive': true,
+    'isRatingPending': false,
     'acceptedByUserId': 'u_1001',
     'acceptedAt': '2026-04-12T14:40:00.000Z',
   },
@@ -48,5 +54,7 @@ const List<Map<String, dynamic>> taskPreviewApiResponse = [
     'distanceKm': 1.8,
     'scheduledAt': '2026-04-14T14:00:00.000Z',
     'executionMode': 'offline',
+    'isActive': true,
+    'isRatingPending': false,
   },
 ];

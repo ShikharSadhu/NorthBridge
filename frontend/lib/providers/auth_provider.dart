@@ -172,4 +172,25 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<bool> submitRatingForUser({
+    required String targetUserId,
+    required double rating,
+  }) async {
+    _isMutating = true;
+    notifyListeners();
+
+    try {
+      final updated = await _authService.submitRatingForUser(
+        targetUserId: targetUserId,
+        rating: rating,
+      );
+      return updated != null;
+    } catch (_) {
+      return false;
+    } finally {
+      _isMutating = false;
+      notifyListeners();
+    }
+  }
 }

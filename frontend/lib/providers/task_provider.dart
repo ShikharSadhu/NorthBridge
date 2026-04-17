@@ -13,6 +13,34 @@ enum AcceptTaskOutcome {
   failed,
 }
 
+enum RequestCompletionOutcome {
+  requested,
+  notFound,
+  notAcceptedHelper,
+  alreadyCompleted,
+  failed,
+}
+
+enum ConfirmCompletionOutcome {
+  completed,
+  declined,
+  notFound,
+  notTaskOwner,
+  noPendingRequest,
+  alreadyCompleted,
+  failed,
+}
+
+enum SubmitRatingOutcome {
+  rated,
+  notFound,
+  notTaskOwner,
+  notCompleted,
+  noPendingRating,
+  invalidRating,
+  failed,
+}
+
 class TaskProvider extends ChangeNotifier {
   TaskProvider({TaskService? taskService})
       : _taskService = taskService ?? TaskService(),
@@ -154,6 +182,152 @@ class TaskProvider extends ChangeNotifier {
       }
     } catch (_) {
       return AcceptTaskOutcome.failed;
+    }
+  }
+
+  Future<RequestCompletionOutcome> requestTaskCompletion({
+    required String taskId,
+    required String helperUserId,
+  }) async {
+    try {
+      final result = await _taskService.requestTaskCompletion(
+        taskId: taskId,
+        helperUserId: helperUserId,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskCompletionRequestResult.requested:
+          return RequestCompletionOutcome.requested;
+        case TaskCompletionRequestResult.notFound:
+          return RequestCompletionOutcome.notFound;
+        case TaskCompletionRequestResult.notAcceptedHelper:
+          return RequestCompletionOutcome.notAcceptedHelper;
+        case TaskCompletionRequestResult.alreadyCompleted:
+          return RequestCompletionOutcome.alreadyCompleted;
+      }
+    } catch (_) {
+      return RequestCompletionOutcome.failed;
+    }
+  }
+
+  Future<ConfirmCompletionOutcome> confirmTaskCompletion({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final result = await _taskService.confirmTaskCompletion(
+        taskId: taskId,
+        ownerUserId: ownerUserId,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskCompletionConfirmResult.completed:
+          return ConfirmCompletionOutcome.completed;
+        case TaskCompletionConfirmResult.declined:
+          return ConfirmCompletionOutcome.declined;
+        case TaskCompletionConfirmResult.notFound:
+          return ConfirmCompletionOutcome.notFound;
+        case TaskCompletionConfirmResult.notTaskOwner:
+          return ConfirmCompletionOutcome.notTaskOwner;
+        case TaskCompletionConfirmResult.noPendingRequest:
+          return ConfirmCompletionOutcome.noPendingRequest;
+        case TaskCompletionConfirmResult.alreadyCompleted:
+          return ConfirmCompletionOutcome.alreadyCompleted;
+      }
+    } catch (_) {
+      return ConfirmCompletionOutcome.failed;
+    }
+  }
+
+  Future<ConfirmCompletionOutcome> declineTaskCompletion({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final result = await _taskService.declineTaskCompletion(
+        taskId: taskId,
+        ownerUserId: ownerUserId,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskCompletionConfirmResult.completed:
+          return ConfirmCompletionOutcome.completed;
+        case TaskCompletionConfirmResult.declined:
+          return ConfirmCompletionOutcome.declined;
+        case TaskCompletionConfirmResult.notFound:
+          return ConfirmCompletionOutcome.notFound;
+        case TaskCompletionConfirmResult.notTaskOwner:
+          return ConfirmCompletionOutcome.notTaskOwner;
+        case TaskCompletionConfirmResult.noPendingRequest:
+          return ConfirmCompletionOutcome.noPendingRequest;
+        case TaskCompletionConfirmResult.alreadyCompleted:
+          return ConfirmCompletionOutcome.alreadyCompleted;
+      }
+    } catch (_) {
+      return ConfirmCompletionOutcome.failed;
+    }
+  }
+
+  Future<SubmitRatingOutcome> submitTaskRating({
+    required String taskId,
+    required String ownerUserId,
+    required double rating,
+  }) async {
+    try {
+      final result = await _taskService.submitTaskRating(
+        taskId: taskId,
+        ownerUserId: ownerUserId,
+        rating: rating,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskRatingResult.rated:
+          return SubmitRatingOutcome.rated;
+        case TaskRatingResult.notFound:
+          return SubmitRatingOutcome.notFound;
+        case TaskRatingResult.notTaskOwner:
+          return SubmitRatingOutcome.notTaskOwner;
+        case TaskRatingResult.notCompleted:
+          return SubmitRatingOutcome.notCompleted;
+        case TaskRatingResult.noPendingRating:
+          return SubmitRatingOutcome.noPendingRating;
+        case TaskRatingResult.invalidRating:
+          return SubmitRatingOutcome.invalidRating;
+      }
+    } catch (_) {
+      return SubmitRatingOutcome.failed;
     }
   }
 }

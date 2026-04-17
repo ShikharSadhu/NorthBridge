@@ -11,6 +11,31 @@ enum TaskAcceptResult {
   notFound,
 }
 
+enum TaskCompletionRequestResult {
+  requested,
+  notFound,
+  notAcceptedHelper,
+  alreadyCompleted,
+}
+
+enum TaskCompletionConfirmResult {
+  completed,
+  declined,
+  notFound,
+  notTaskOwner,
+  noPendingRequest,
+  alreadyCompleted,
+}
+
+enum TaskRatingResult {
+  rated,
+  notFound,
+  notTaskOwner,
+  notCompleted,
+  noPendingRating,
+  invalidRating,
+}
+
 class TaskService {
   static List<Map<String, dynamic>> _taskStore = taskPreviewApiResponse
       .map((task) => Map<String, dynamic>.from(task))
@@ -93,6 +118,143 @@ class TaskService {
     next[taskIndex] = updated.toJson();
     _taskStore = next;
     return TaskAcceptResult.accepted;
+  }
+
+  Future<TaskCompletionRequestResult> requestTaskCompletion({
+    required String taskId,
+    required String helperUserId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
+    final taskIndex = _taskStore.indexWhere((task) => task['id'] == taskId);
+    if (taskIndex < 0) {
+      return TaskCompletionRequestResult.notFound;
+    }
+
+    final current = TaskModel.fromJson(_taskStore[taskIndex]);
+    if (!current.isActive) {
+      return TaskCompletionRequestResult.alreadyCompleted;
+    }
+
+    if (current.acceptedByUserId != helperUserId) {
+      return TaskCompletionRequestResult.notAcceptedHelper;
+    }
+
+    final updated = current.copyWith(
+      completionRequestedByUserId: helperUserId,
+      completionRequestedAt: DateTime.now().toUtc(),
+      clearCompletionRequest: false,
+    );
+
+    final next = List<Map<String, dynamic>>.from(_taskStore);
+    next[taskIndex] = updated.toJson();
+    _taskStore = next;
+    return TaskCompletionRequestResult.requested;
+  }
+
+  Future<TaskCompletionConfirmResult> confirmTaskCompletion({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
+    final taskIndex = _taskStore.indexWhere((task) => task['id'] == taskId);
+    if (taskIndex < 0) {
+      return TaskCompletionConfirmResult.notFound;
+    }
+
+    final current = TaskModel.fromJson(_taskStore[taskIndex]);
+    if (current.postedByUserId != ownerUserId) {
+      return TaskCompletionConfirmResult.notTaskOwner;
+    }
+    if (!current.isActive) {
+      return TaskCompletionConfirmResult.alreadyCompleted;
+    }
+    if ((current.completionRequestedByUserId ?? '').isEmpty) {
+      return TaskCompletionConfirmResult.noPendingRequest;
+    }
+
+    final updated = current.copyWith(
+      isActive: false,
+      completedByUserId: current.completionRequestedByUserId,
+      completedAt: DateTime.now().toUtc(),
+      isRatingPending: true,
+      clearCompletionRequest: true,
+    );
+
+    final next = List<Map<String, dynamic>>.from(_taskStore);
+    next[taskIndex] = updated.toJson();
+    _taskStore = next;
+    return TaskCompletionConfirmResult.completed;
+  }
+
+  Future<TaskCompletionConfirmResult> declineTaskCompletion({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
+    final taskIndex = _taskStore.indexWhere((task) => task['id'] == taskId);
+    if (taskIndex < 0) {
+      return TaskCompletionConfirmResult.notFound;
+    }
+
+    final current = TaskModel.fromJson(_taskStore[taskIndex]);
+    if (current.postedByUserId != ownerUserId) {
+      return TaskCompletionConfirmResult.notTaskOwner;
+    }
+    if (!current.isActive) {
+      return TaskCompletionConfirmResult.alreadyCompleted;
+    }
+    if ((current.completionRequestedByUserId ?? '').isEmpty) {
+      return TaskCompletionConfirmResult.noPendingRequest;
+    }
+
+    final updated = current.copyWith(clearCompletionRequest: true);
+
+    final next = List<Map<String, dynamic>>.from(_taskStore);
+    next[taskIndex] = updated.toJson();
+    _taskStore = next;
+    return TaskCompletionConfirmResult.declined;
+  }
+
+  Future<TaskRatingResult> submitTaskRating({
+    required String taskId,
+    required String ownerUserId,
+    required double rating,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+
+    if (rating < 1 || rating > 5) {
+      return TaskRatingResult.invalidRating;
+    }
+
+    final taskIndex = _taskStore.indexWhere((task) => task['id'] == taskId);
+    if (taskIndex < 0) {
+      return TaskRatingResult.notFound;
+    }
+
+    final current = TaskModel.fromJson(_taskStore[taskIndex]);
+    if (current.postedByUserId != ownerUserId) {
+      return TaskRatingResult.notTaskOwner;
+    }
+    if (current.isActive) {
+      return TaskRatingResult.notCompleted;
+    }
+    if (!current.isRatingPending) {
+      return TaskRatingResult.noPendingRating;
+    }
+
+    final updated = current.copyWith(
+      completionRating: rating,
+      ratedAt: DateTime.now().toUtc(),
+      isRatingPending: false,
+    );
+
+    final next = List<Map<String, dynamic>>.from(_taskStore);
+    next[taskIndex] = updated.toJson();
+    _taskStore = next;
+    return TaskRatingResult.rated;
   }
 
   Future<Map<String, dynamic>> processVoiceInput(String text) async {

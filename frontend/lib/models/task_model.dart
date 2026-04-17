@@ -12,6 +12,14 @@ class TaskModel {
     required this.distanceKm,
     required this.scheduledAt,
     required this.executionMode,
+    this.isActive = true,
+    this.completionRequestedByUserId,
+    this.completionRequestedAt,
+    this.completedByUserId,
+    this.completedAt,
+    this.isRatingPending = false,
+    this.completionRating,
+    this.ratedAt,
     this.acceptedByUserId,
     this.acceptedAt,
   });
@@ -26,6 +34,14 @@ class TaskModel {
   final double distanceKm;
   final DateTime scheduledAt;
   final TaskExecutionMode executionMode;
+  final bool isActive;
+  final String? completionRequestedByUserId;
+  final DateTime? completionRequestedAt;
+  final String? completedByUserId;
+  final DateTime? completedAt;
+  final bool isRatingPending;
+  final double? completionRating;
+  final DateTime? ratedAt;
   final String? acceptedByUserId;
   final DateTime? acceptedAt;
 
@@ -42,6 +58,21 @@ class TaskModel {
       scheduledAt: DateTime.parse(json['scheduledAt'] as String),
       executionMode:
           TaskExecutionMode.fromValue(json['executionMode'] as String?),
+        isActive: json['isActive'] as bool? ?? true,
+        completionRequestedByUserId:
+          json['completionRequestedByUserId'] as String?,
+        completionRequestedAt: (json['completionRequestedAt'] as String?) == null
+          ? null
+          : DateTime.parse(json['completionRequestedAt'] as String),
+        completedByUserId: json['completedByUserId'] as String?,
+        completedAt: (json['completedAt'] as String?) == null
+          ? null
+          : DateTime.parse(json['completedAt'] as String),
+        isRatingPending: json['isRatingPending'] as bool? ?? false,
+        completionRating: (json['completionRating'] as num?)?.toDouble(),
+        ratedAt: (json['ratedAt'] as String?) == null
+          ? null
+          : DateTime.parse(json['ratedAt'] as String),
       acceptedByUserId: json['acceptedByUserId'] as String?,
       acceptedAt: (json['acceptedAt'] as String?) == null
           ? null
@@ -60,9 +91,18 @@ class TaskModel {
     double? distanceKm,
     DateTime? scheduledAt,
     TaskExecutionMode? executionMode,
+    bool? isActive,
+    String? completionRequestedByUserId,
+    DateTime? completionRequestedAt,
+    String? completedByUserId,
+    DateTime? completedAt,
+    bool? isRatingPending,
+    double? completionRating,
+    DateTime? ratedAt,
     String? acceptedByUserId,
     DateTime? acceptedAt,
     bool clearAcceptance = false,
+    bool clearCompletionRequest = false,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -75,6 +115,18 @@ class TaskModel {
       distanceKm: distanceKm ?? this.distanceKm,
       scheduledAt: scheduledAt ?? this.scheduledAt,
       executionMode: executionMode ?? this.executionMode,
+        isActive: isActive ?? this.isActive,
+        completionRequestedByUserId: clearCompletionRequest
+          ? null
+          : (completionRequestedByUserId ?? this.completionRequestedByUserId),
+        completionRequestedAt: clearCompletionRequest
+          ? null
+          : (completionRequestedAt ?? this.completionRequestedAt),
+        completedByUserId: completedByUserId ?? this.completedByUserId,
+        completedAt: completedAt ?? this.completedAt,
+        isRatingPending: isRatingPending ?? this.isRatingPending,
+        completionRating: completionRating ?? this.completionRating,
+        ratedAt: ratedAt ?? this.ratedAt,
       acceptedByUserId:
           clearAcceptance ? null : (acceptedByUserId ?? this.acceptedByUserId),
       acceptedAt: clearAcceptance ? null : (acceptedAt ?? this.acceptedAt),
@@ -93,6 +145,14 @@ class TaskModel {
       'distanceKm': distanceKm,
       'scheduledAt': scheduledAt.toIso8601String(),
       'executionMode': executionMode.storageValue,
+      'isActive': isActive,
+      'completionRequestedByUserId': completionRequestedByUserId,
+      'completionRequestedAt': completionRequestedAt?.toIso8601String(),
+      'completedByUserId': completedByUserId,
+      'completedAt': completedAt?.toIso8601String(),
+      'isRatingPending': isRatingPending,
+      'completionRating': completionRating,
+      'ratedAt': ratedAt?.toIso8601String(),
       'acceptedByUserId': acceptedByUserId,
       'acceptedAt': acceptedAt?.toIso8601String(),
     };

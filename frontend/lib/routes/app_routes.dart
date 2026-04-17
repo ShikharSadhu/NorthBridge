@@ -141,6 +141,7 @@ class AppRoutes {
           builder: (_) => ChatThreadScreen(
             chatProvider: chatProvider,
             authProvider: authProvider,
+            taskProvider: taskProvider,
             chat: args.chat,
           ),
           settings: settings,

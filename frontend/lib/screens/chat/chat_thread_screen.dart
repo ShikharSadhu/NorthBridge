@@ -8,6 +8,7 @@ import 'package:frontend/core/utils/date_time_utils.dart';
 import 'package:frontend/models/chat_model.dart';
 import 'package:frontend/providers/auth_provider.dart';
 import 'package:frontend/providers/chat_provider.dart';
+import 'package:frontend/providers/task_provider.dart';
 import 'package:frontend/routes/app_routes.dart';
 import 'package:frontend/widgets/app_button.dart';
 import 'package:frontend/widgets/app_card.dart';
@@ -18,6 +19,7 @@ class ChatThreadScreen extends StatefulWidget {
     super.key,
     required this.chatProvider,
     required this.authProvider,
+    required this.taskProvider,
     required this.chat,
   });
 
@@ -25,6 +27,7 @@ class ChatThreadScreen extends StatefulWidget {
 
   final ChatProvider chatProvider;
   final AuthProvider authProvider;
+  final TaskProvider taskProvider;
   final ChatModel chat;
 
   @override
@@ -215,6 +218,174 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     );
   }
 
+  Future<void> _requestTaskCompletion() async {
+    final outcome = await widget.taskProvider.requestTaskCompletion(
+      taskId: widget.chat.taskId,
+      helperUserId: _currentUserId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case RequestCompletionOutcome.requested:
+        await widget.chatProvider.sendMessage(
+          chatId: widget.chat.chatId,
+          taskId: widget.chat.taskId,
+          senderId: _currentUserId,
+          text: 'Task marked as done. Please confirm completion.',
+        );
+        break;
+      case RequestCompletionOutcome.notFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found.')),
+        );
+        break;
+      case RequestCompletionOutcome.notAcceptedHelper:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only accepted helper can request completion.')),
+        );
+        break;
+      case RequestCompletionOutcome.alreadyCompleted:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task is already completed.')),
+        );
+        break;
+      case RequestCompletionOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to request completion right now.')),
+        );
+        break;
+    }
+  }
+
+  Future<void> _confirmTaskCompleted() async {
+    final outcome = await widget.taskProvider.confirmTaskCompletion(
+      taskId: widget.chat.taskId,
+      ownerUserId: _currentUserId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case ConfirmCompletionOutcome.completed:
+        await widget.chatProvider.sendMessage(
+          chatId: widget.chat.chatId,
+          taskId: widget.chat.taskId,
+          senderId: _currentUserId,
+          text: 'Task marked as completed. Please rate the helper (1-5).',
+        );
+        break;
+      case ConfirmCompletionOutcome.notFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.notTaskOwner:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only task owner can confirm completion.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.noPendingRequest:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pending completion request.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.alreadyCompleted:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task is already completed.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.declined:
+      case ConfirmCompletionOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to confirm completion right now.')),
+        );
+        break;
+    }
+  }
+
+  Future<void> _declineTaskCompletion() async {
+    final outcome = await widget.taskProvider.declineTaskCompletion(
+      taskId: widget.chat.taskId,
+      ownerUserId: _currentUserId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case ConfirmCompletionOutcome.declined:
+        await widget.chatProvider.sendMessage(
+          chatId: widget.chat.chatId,
+          taskId: widget.chat.taskId,
+          senderId: _currentUserId,
+          text: 'Completion request declined. Task remains active.',
+        );
+        break;
+      case ConfirmCompletionOutcome.notFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.notTaskOwner:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only task owner can review completion request.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.noPendingRequest:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pending completion request.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.alreadyCompleted:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task is already completed.')),
+        );
+        break;
+      case ConfirmCompletionOutcome.completed:
+      case ConfirmCompletionOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to decline request right now.')),
+        );
+        break;
+    }
+  }
+
+  Future<void> _submitCompletionRating(double rating, String targetUserId) async {
+    final updatedProfile = await widget.authProvider.submitRatingForUser(
+      targetUserId: targetUserId,
+      rating: rating,
+    );
+    final taskOutcome = await widget.taskProvider.submitTaskRating(
+      taskId: widget.chat.taskId,
+      ownerUserId: _currentUserId,
+      rating: rating,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (updatedProfile && taskOutcome == SubmitRatingOutcome.rated) {
+      await widget.chatProvider.sendMessage(
+        chatId: widget.chat.chatId,
+        taskId: widget.chat.taskId,
+        senderId: _currentUserId,
+        text: 'Rated helper: ${rating.toStringAsFixed(1)}/5',
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to submit rating right now.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -229,12 +400,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           child: Padding(
             padding: AppSpacing.screenPadding,
             child: AnimatedBuilder(
-              animation: widget.chatProvider,
+              animation: Listenable.merge(
+                [widget.chatProvider, widget.taskProvider, widget.authProvider],
+              ),
               builder: (context, _) {
                 final state = widget.chatProvider.messagesState;
                 final messages = state.data ?? const [];
                 final currentUserId = _currentUserId;
+                final matchingTasks = widget.taskProvider.tasks
+                  .where((item) => item.id == widget.chat.taskId)
+                  .toList(growable: false);
+                final task = matchingTasks.isEmpty ? null : matchingTasks.first;
                 final isOwnTask = currentUserId == widget.chat.taskOwnerUserId;
+                final isAcceptedHelper = task != null &&
+                    task.acceptedByUserId == currentUserId &&
+                    currentUserId != widget.chat.taskOwnerUserId;
                 final counterpartUserId = widget.chat.users.firstWhere(
                   (id) => id != currentUserId,
                   orElse: () => widget.chat.taskOwnerUserId,
@@ -313,6 +493,102 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         ),
                       ),
                     ),
+                    if (task != null && task.isActive && isAcceptedHelper) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      OutlinedButton.icon(
+                        onPressed: _requestTaskCompletion,
+                        icon: const Icon(Icons.task_alt_outlined),
+                        label: const Text('Mark task as done'),
+                      ),
+                    ],
+                    if (task != null &&
+                        task.isActive &&
+                        isAcceptedHelper &&
+                        task.completionRequestedByUserId == currentUserId) ...[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        'Completion request sent. Waiting for task giver confirmation.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (task != null &&
+                        task.isActive &&
+                        isOwnTask &&
+                        (task.completionRequestedByUserId ?? '').isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      AppCard(
+                        child: Padding(
+                          padding: AppSpacing.cardPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Helper marked task as done. Confirm completion?',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed: _confirmTaskCompleted,
+                                      child: const Text('Mark completed'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: _declineTaskCompletion,
+                                      child: const Text('Not yet'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (task != null &&
+                        !task.isActive &&
+                        task.isRatingPending &&
+                        isOwnTask &&
+                        (task.completedByUserId ?? '').isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      AppCard(
+                        child: Padding(
+                          padding: AppSpacing.cardPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Rate the helper',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Wrap(
+                                spacing: AppSpacing.xs,
+                                children: [1, 2, 3, 4, 5]
+                                    .map(
+                                      (value) => OutlinedButton(
+                                        onPressed: widget.authProvider.isMutating
+                                            ? null
+                                            : () => _submitCompletionRating(
+                                                  value.toDouble(),
+                                                  task.completedByUserId!,
+                                                ),
+                                        child: Text('$value ★'),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: ListView.separated(
