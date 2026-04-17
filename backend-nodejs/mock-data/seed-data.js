@@ -44,7 +44,9 @@ const tasks = [
 		price: 18,
 		distanceKm: 1.3,
 		scheduledAt: '2026-04-13T18:30:00.000Z',
+		executionMode: 'offline',
 		status: 'open',
+		acceptedAt: null,
 	},
 	{
 		id: '2',
@@ -56,7 +58,9 @@ const tasks = [
 		price: 35,
 		distanceKm: 2.7,
 		scheduledAt: '2026-04-14T10:00:00.000Z',
+		executionMode: 'offline',
 		status: 'open',
+		acceptedAt: null,
 	},
 	{
 		id: '3',
@@ -68,8 +72,10 @@ const tasks = [
 		price: 12,
 		distanceKm: 0.9,
 		scheduledAt: '2026-04-12T15:15:00.000Z',
+		executionMode: 'offline',
 		status: 'accepted',
 		acceptedByUserId: 'u_1004',
+		acceptedAt: '2026-04-12T15:20:00.000Z',
 	},
 ];
 

@@ -30,7 +30,10 @@ function getEnvConfig(env = process.env) {
 		firebaseDatabaseURL: env.FIREBASE_DATABASE_URL || '',
 		firebaseStorageBucket: env.FIREBASE_STORAGE_BUCKET || '',
 		firebaseAppId: env.FIREBASE_APP_ID || '',
+		firebaseCredentialsJson: env.FIREBASE_CREDENTIALS_JSON || '',
+		googleApplicationCredentials: env.GOOGLE_APPLICATION_CREDENTIALS || '',
 		enableFirebaseEmulator: toBoolean(env.FIREBASE_EMULATOR, false),
+		firestoreEmulatorHost: env.FIRESTORE_EMULATOR_HOST || '',
 	};
 }
 

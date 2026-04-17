@@ -26,6 +26,7 @@ const taskRoutes = [
 				location: typeof body.location === 'string' ? body.location : undefined,
 				price: typeof body.price === 'number' ? body.price : undefined,
 				scheduledAt: typeof body.scheduledAt === 'string' ? body.scheduledAt : undefined,
+				executionMode: typeof body.executionMode === 'string' ? body.executionMode : undefined,
 				postedByUserId:
 					typeof body.postedByUserId === 'string' ? body.postedByUserId : undefined,
 				postedByName: typeof body.postedByName === 'string' ? body.postedByName : undefined,
@@ -34,11 +35,11 @@ const taskRoutes = [
 	{
 		method: 'POST',
 		path: '/v1/tasks/:taskId/accept',
-		execute: (params, body) =>
+		execute: (params, body, userId) =>
 			acceptTaskController(params.taskId, {
 				acceptedByUserId:
 					typeof body.acceptedByUserId === 'string' ? body.acceptedByUserId : undefined,
-			}),
+			}, userId),
 	},
 ];
 

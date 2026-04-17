@@ -61,7 +61,7 @@ function createAppHandler() {
 			return;
 		}
 
-		const result = handleApiRequest({
+		const result = await handleApiRequest({
 			method,
 			path,
 			body: parsedBody,

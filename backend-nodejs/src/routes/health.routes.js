@@ -1,3 +1,5 @@
+const {createFirebaseAdminConfig, hasFirestoreConnection} = require('../config/firebase');
+
 const healthRoutes = [
 	{
 		method: 'GET',
@@ -6,6 +8,10 @@ const healthRoutes = [
 			status: 200,
 			body: {
 				status: 'ok',
+				firestore: {
+					configured: createFirebaseAdminConfig().configured,
+					connected: hasFirestoreConnection(),
+				},
 			},
 		}),
 	},

@@ -17,8 +17,10 @@ function toTaskRecord(task) {
 		price: typeof task.price === 'number' ? task.price : 0,
 		distanceKm: typeof task.distanceKm === 'number' ? task.distanceKm : 0,
 		scheduledAt: normalizeString(task.scheduledAt),
+		executionMode: normalizeString(task.executionMode) || 'offline',
 		status: task.status === 'accepted' ? 'accepted' : 'open',
 		acceptedByUserId: normalizeString(task.acceptedByUserId) || undefined,
+		acceptedAt: normalizeString(task.acceptedAt) || undefined,
 	};
 }
 
@@ -33,7 +35,8 @@ function isValidTaskRecord(task) {
 			typeof task.location === 'string' &&
 			typeof task.price === 'number' &&
 			typeof task.distanceKm === 'number' &&
-			typeof task.scheduledAt === 'string',
+				typeof task.scheduledAt === 'string' &&
+				typeof task.executionMode === 'string',
 	);
 }
 

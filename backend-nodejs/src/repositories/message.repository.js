@@ -1,23 +1,53 @@
 const seedData = require('../../mock-data/seed-data');
+const {getFirestoreDb} = require('../config/firebase');
+const {buildPrefixedId} = require('../utils/id.util');
 const {toMessageRecord, normalizeString} = require('../models/message.model');
 
-function getMessageStore() {
-	return seedData.messages;
+function normalizeMessageRecord(record) {
+	if (!record || typeof record !== 'object') {
+		return null;
+	}
+
+	return {
+		id: normalizeString(record.id),
+		chatId: normalizeString(record.chatId),
+		taskId: normalizeString(record.taskId),
+		senderId: normalizeString(record.senderId),
+		text: normalizeString(record.text),
+		timestamp:
+			typeof record.timestamp === 'string' && record.timestamp.trim()
+				? record.timestamp.trim()
+				: new Date().toISOString(),
+	};
 }
 
-function listMessagesByChatId(chatId) {
+async function listMessageRecordsByChatId(chatId) {
 	const normalizedChatId = normalizeString(chatId);
-	return getMessageStore()
-		.filter((message) => message.chatId === normalizedChatId)
-		.map((message) => toMessageRecord(message));
+	if (!normalizedChatId) {
+		return [];
+	}
+
+	const db = getFirestoreDb();
+	if (!db) {
+		return seedData.messages
+			.filter((message) => message.chatId === normalizedChatId)
+			.map((message) => normalizeMessageRecord(message));
+	}
+
+	const snapshot = await db.collection('messages').where('chatId', '==', normalizedChatId).get();
+	return snapshot.docs.map((doc) => normalizeMessageRecord({id: doc.id, ...doc.data()}));
+}
+
+async function listMessagesByChatId(chatId) {
+	return (await listMessageRecordsByChatId(chatId)).map((message) => toMessageRecord(message));
 }
 
 function nextMessageId() {
-	return `m_${String(getMessageStore().length + 5001).padStart(4, '0')}`;
+	return buildPrefixedId('m');
 }
 
-function createMessage(input) {
-	const created = {
+async function createMessage(input) {
+	const created = normalizeMessageRecord({
 		id: nextMessageId(),
 		chatId: normalizeString(input.chatId),
 		taskId: normalizeString(input.taskId),
@@ -25,16 +55,21 @@ function createMessage(input) {
 		text: normalizeString(input.text),
 		timestamp:
 			typeof input.timestamp === 'string' && input.timestamp.trim()
-				? input.timestamp
+				? input.timestamp.trim()
 				: new Date().toISOString(),
-	};
+	});
 
-	getMessageStore().push(created);
+	const db = getFirestoreDb();
+	if (db) {
+		await db.collection('messages').doc(created.id).set(created);
+	} else {
+		seedData.messages.push(created);
+	}
+
 	return toMessageRecord(created);
 }
 
 module.exports = {
-	getMessageStore,
 	listMessagesByChatId,
 	nextMessageId,
 	createMessage,

@@ -11,11 +11,11 @@ const {
 const {success, failure} = require('../utils/response.util');
 
 function fetchTasks() {
-	return success(200, listTasks());
+	return Promise.resolve(listTasks()).then((tasks) => success(200, tasks));
 }
 
-function fetchTaskById(taskId) {
-	const task = getTaskById(taskId);
+async function fetchTaskById(taskId) {
+	const task = await getTaskById(taskId);
 	if (!task) {
 		return failure(404, 'Task not found.');
 	}
@@ -23,24 +23,24 @@ function fetchTaskById(taskId) {
 	return success(200, task);
 }
 
-function createTaskEntry(payload = {}) {
+async function createTaskEntry(payload = {}) {
 	const validation = validateCreateTaskPayload(payload);
 	if (!validation.valid) {
 		return failure(400, 'Title, description, location, price, and scheduledAt are required.');
 	}
 
-	const task = createTask(validation.value);
+	const task = await createTask(validation.value);
 	return success(201, task);
 }
 
-function acceptTaskEntry(taskId, payload = {}) {
-	const task = getTaskById(taskId);
+async function acceptTaskEntry(taskId, payload = {}) {
+	const task = await getTaskById(taskId);
 	if (!task) {
 		return failure(404, 'Task not found.');
 	}
 
 	const validation = validateAcceptTaskPayload(payload);
-	const updatedTask = acceptTask(taskId, validation.value.acceptedByUserId);
+	const updatedTask = await acceptTask(taskId, validation.value.acceptedByUserId);
 	return success(200, updatedTask);
 }
 

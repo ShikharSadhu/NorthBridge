@@ -135,7 +135,7 @@ function hasPathForAnyMethod(path) {
 	return false;
 }
 
-function handleApiRequest(request) {
+async function handleApiRequest(request) {
 	const method = String(request.method || '').toUpperCase();
 	const path = typeof request.path === 'string' ? request.path : '/';
 	const query = parseQuery(path);
@@ -149,7 +149,7 @@ function handleApiRequest(request) {
 		...(userId ? {userId} : {}),
 	};
 
-	if (method !== 'GET' && method !== 'POST') {
+	if (method !== 'GET' && method !== 'POST' && method !== 'PATCH') {
 		return {
 			status: 405,
 			body: {
@@ -177,7 +177,17 @@ function handleApiRequest(request) {
 		};
 	}
 
-	const result = route.execute(params, payload);
+	let result;
+	try {
+		result = await Promise.resolve(route.execute(params, payload, userId));
+	} catch (_error) {
+		return {
+			status: 500,
+			body: {
+				message: 'Route execution failed.',
+			},
+		};
+	}
 	if (result && typeof result === 'object' && 'status' in result && 'body' in result) {
 		return {
 			status: result.status,

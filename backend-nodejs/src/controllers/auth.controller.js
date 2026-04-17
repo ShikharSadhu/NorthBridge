@@ -6,4 +6,5 @@ module.exports = {
 	loginController: userController.loginController,
 	logoutController: userController.logoutController,
 	signupController: userController.signupController,
+	updateUserProfileController: userController.updateUserProfileController,
 };

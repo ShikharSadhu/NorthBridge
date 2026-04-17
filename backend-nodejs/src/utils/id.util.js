@@ -1,4 +1,12 @@
-function normalizePrefix(prefix) {
+const {randomUUID} = require('crypto');
+
+function buildPrefixedId(prefix) {
+	return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+module.exports = {
+	buildPrefixedId,
+};function normalizePrefix(prefix) {
 	return typeof prefix === 'string' && prefix.trim() ? prefix.trim() : 'id';
 }
 
