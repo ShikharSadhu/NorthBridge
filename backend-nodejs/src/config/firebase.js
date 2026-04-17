@@ -1,28 +1,10 @@
-const {getEnvConfig} = require('./env');
+const admin = require("firebase-admin");
 
-function isFirebaseConfigured(env = getEnvConfig()) {
-	return Boolean(env.firebaseProjectId || env.firebaseAppId);
-}
+// Initialize Firebase using environment variable
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
 
-function getFirebaseConfig(env = getEnvConfig()) {
-	return {
-		projectId: env.firebaseProjectId || null,
-		databaseURL: env.firebaseDatabaseURL || null,
-		storageBucket: env.firebaseStorageBucket || null,
-		appId: env.firebaseAppId || null,
-		enableEmulator: Boolean(env.enableFirebaseEmulator),
-	};
-}
+const db = admin.firestore();
 
-function createFirebaseAdminConfig(env = getEnvConfig()) {
-	return {
-		configured: isFirebaseConfigured(env),
-		config: getFirebaseConfig(env),
-	};
-}
-
-module.exports = {
-	isFirebaseConfigured,
-	getFirebaseConfig,
-	createFirebaseAdminConfig,
-};
+module.exports = { db };
