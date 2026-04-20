@@ -14,6 +14,8 @@ function toMessageRecord(message) {
 		senderId: normalizeString(message.senderId),
 		text: normalizeString(message.text),
 		timestamp: normalizeString(message.timestamp),
+		imageDataUrl: normalizeString(message.imageDataUrl) || undefined,
+		isPaymentRequest: Boolean(message.isPaymentRequest),
 	};
 }
 
@@ -25,7 +27,8 @@ function isValidMessageRecord(message) {
 			typeof message.taskId === 'string' &&
 			typeof message.senderId === 'string' &&
 			typeof message.text === 'string' &&
-			typeof message.timestamp === 'string',
+			typeof message.timestamp === 'string' &&
+			typeof message.isPaymentRequest === 'boolean',
 	);
 }
 

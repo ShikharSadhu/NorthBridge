@@ -123,6 +123,28 @@ describe('Route methods and paths', () => {
 		});
 	});
 
+	describe('Report routes', () => {
+		test('POST /v1/reports/users/:userId should exist', () => {
+			const route = routes.find((r) => r.method === 'POST' && r.path === '/v1/reports/users/:userId');
+			expect(route).toBeDefined();
+		});
+
+		test('POST /v1/reports/messages/:messageId should exist', () => {
+			const route = routes.find((r) => r.method === 'POST' && r.path === '/v1/reports/messages/:messageId');
+			expect(route).toBeDefined();
+		});
+
+		test('GET /v1/reports should exist', () => {
+			const route = routes.find((r) => r.method === 'GET' && r.path === '/v1/reports');
+			expect(route).toBeDefined();
+		});
+
+		test('PATCH /v1/reports/:reportId should exist', () => {
+			const route = routes.find((r) => r.method === 'PATCH' && r.path === '/v1/reports/:reportId');
+			expect(route).toBeDefined();
+		});
+	});
+
 	describe('Health routes', () => {
 		test('GET /v1/health should exist', () => {
 			const route = routes.find((r) => r.method === 'GET' && r.path === '/v1/health');

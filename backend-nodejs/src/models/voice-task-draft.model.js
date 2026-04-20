@@ -10,6 +10,7 @@ function toVoiceTaskDraft(value) {
 			location: '',
 			price: 0,
 			scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+			executionMode: 'offline',
 		};
 	}
 
@@ -22,6 +23,10 @@ function toVoiceTaskDraft(value) {
 			typeof value.scheduledAt === 'string' && value.scheduledAt.trim()
 				? value.scheduledAt
 				: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+		executionMode:
+			typeof value.executionMode === 'string' && value.executionMode.trim()
+				? value.executionMode.trim().toLowerCase()
+				: 'offline',
 	};
 }
 
@@ -32,7 +37,8 @@ function isValidVoiceTaskDraft(value) {
 			typeof value.description === 'string' &&
 			typeof value.location === 'string' &&
 			typeof value.price === 'number' &&
-			typeof value.scheduledAt === 'string',
+			typeof value.scheduledAt === 'string' &&
+			typeof value.executionMode === 'string',
 	);
 }
 

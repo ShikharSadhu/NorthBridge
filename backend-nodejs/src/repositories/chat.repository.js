@@ -1,5 +1,5 @@
-const seedData = require('../../mock-data/seed-data');
-const {getFirestoreDb} = require('../config/firebase');
+const {getRequiredFirestoreDb} = require('../config/firebase');
+const {buildPrefixedId} = require('../utils/id.util');
 const {toChatRecord, normalizeString} = require('../models/chat.model');
 const {toMessageRecord} = require('../models/message.model');
 
@@ -31,16 +31,14 @@ function normalizeMessageRecord(record) {
 		taskId: normalizeString(record.taskId),
 		senderId: normalizeString(record.senderId),
 		text: normalizeString(record.text),
+		imageDataUrl: normalizeString(record.imageDataUrl) || undefined,
+		isPaymentRequest: Boolean(record.isPaymentRequest),
 		timestamp: normalizeString(record.timestamp),
 	};
 }
 
 async function listChatRecords() {
-	const db = getFirestoreDb();
-	if (!db) {
-		return seedData.chats.map((chat) => normalizeChatRecord(chat));
-	}
-
+	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('chats').get();
 	return snapshot.docs.map((doc) => normalizeChatRecord({chatId: doc.id, ...doc.data()}));
 }
@@ -51,11 +49,7 @@ async function getChatRecordById(chatId) {
 		return null;
 	}
 
-	const db = getFirestoreDb();
-	if (!db) {
-		return normalizeChatRecord(seedData.chats.find((entry) => entry.chatId === normalizedChatId));
-	}
-
+	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('chats').doc(normalizedChatId).get();
 	if (!snapshot.exists) {
 		return null;
@@ -68,8 +62,36 @@ async function listChats() {
 	return (await listChatRecords()).map((chat) => toChatRecord(chat));
 }
 
+async function listChatsByUserId(userId) {
+	const normalizedUserId = normalizeString(userId);
+	if (!normalizedUserId) {
+		return [];
+	}
+
+	const chats = await listChatRecords();
+	const filtered = chats.filter((chat) => Array.isArray(chat.users) && chat.users.includes(normalizedUserId));
+	return filtered.map((chat) => toChatRecord(chat));
+}
+
 async function getChatById(chatId) {
 	return toChatRecord(await getChatRecordById(chatId));
+}
+
+async function getChatByTaskAndUsers(taskId, firstUserId, secondUserId) {
+	const normalizedTaskId = normalizeString(taskId);
+	const firstUser = normalizeString(firstUserId);
+	const secondUser = normalizeString(secondUserId);
+	if (!normalizedTaskId || !firstUser || !secondUser) {
+		return null;
+	}
+
+	const chats = await listChatRecords();
+	const found = chats.find((chat) => {
+		const users = Array.isArray(chat.users) ? chat.users : [];
+		return chat.taskId === normalizedTaskId && users.includes(firstUser) && users.includes(secondUser);
+	});
+
+	return toChatRecord(found || null);
 }
 
 async function updateChatLastMessage(chatId, message) {
@@ -79,17 +101,7 @@ async function updateChatLastMessage(chatId, message) {
 	}
 
 	const normalizedMessage = toMessageRecord(message);
-	const db = getFirestoreDb();
-	if (!db) {
-		const chat = seedData.chats.find((entry) => entry.chatId === normalizedChatId);
-		if (!chat) {
-			return null;
-		}
-
-		chat.lastMessage = normalizedMessage;
-		return toChatRecord(normalizeChatRecord(chat));
-	}
-
+	const db = getRequiredFirestoreDb();
 	const ref = db.collection('chats').doc(normalizedChatId);
 	const snapshot = await ref.get();
 	if (!snapshot.exists) {
@@ -104,8 +116,33 @@ async function updateChatLastMessage(chatId, message) {
 	return toChatRecord(normalizeChatRecord({chatId: snapshot.id, ...snapshot.data(), ...updates}));
 }
 
+function nextChatId() {
+	return buildPrefixedId('c');
+}
+
+async function createChat(input = {}) {
+	const created = normalizeChatRecord({
+		chatId: nextChatId(),
+		taskId: normalizeString(input.taskId),
+		taskTitle: normalizeString(input.taskTitle),
+		taskOwnerUserId: normalizeString(input.taskOwnerUserId),
+		taskOwnerName: normalizeString(input.taskOwnerName),
+		users: Array.isArray(input.users) ? input.users.filter((entry) => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean) : [],
+		lastMessage: normalizeMessageRecord(input.lastMessage),
+		updatedAt: new Date().toISOString(),
+	});
+
+	const db = getRequiredFirestoreDb();
+	await db.collection('chats').doc(created.chatId).set(created);
+
+	return toChatRecord(created);
+}
+
 module.exports = {
 	listChats,
+	listChatsByUserId,
 	getChatById,
+	getChatByTaskAndUsers,
+	createChat,
 	updateChatLastMessage,
 };

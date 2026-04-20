@@ -25,6 +25,39 @@ async function listTasksController() {
 	};
 }
 
+async function listTasksWithFilterController(payload = {}) {
+	const result = await taskService.fetchTasks(payload);
+	return {
+		status: result.status,
+		body: {
+			tasks: result.data,
+		},
+	};
+}
+
+async function getMyTaskHistoryController(authUserId = '', payload = {}) {
+	const result = await taskService.fetchMyTaskHistory({
+		...payload,
+		userId: authUserId || payload.userId,
+	});
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				tasks: [],
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			tasks: result.data,
+		},
+	};
+}
+
 async function getTaskController(taskId) {
 	const result = await taskService.fetchTaskById(taskId);
 	return {
@@ -76,8 +109,146 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 	};
 }
 
-async function listChatsController() {
-	const result = await chatService.fetchChats();
+async function requestTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		helperUserId: payload.helperUserId || authUserId,
+	};
+	const result = await taskService.requestTaskCompletionEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function confirmTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		ownerUserId: payload.ownerUserId || authUserId,
+	};
+	const result = await taskService.confirmTaskCompletionEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function declineTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		ownerUserId: payload.ownerUserId || authUserId,
+	};
+	const result = await taskService.declineTaskCompletionEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function submitTaskRatingController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		ownerUserId: payload.ownerUserId || authUserId,
+	};
+	const result = await taskService.submitTaskRatingEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function completeTaskController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		ownerUserId: payload.ownerUserId || authUserId,
+	};
+	const result = await taskService.completeTaskEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function cancelTaskController(taskId, payload = {}, authUserId = '') {
+	const mergedPayload = {
+		...payload,
+		ownerUserId: payload.ownerUserId || authUserId,
+	};
+	const result = await taskService.cancelTaskEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function listChatsController(payload = {}) {
+	const result = await chatService.fetchChats(payload);
 	return {
 		status: result.status,
 		body: {
@@ -86,8 +257,8 @@ async function listChatsController() {
 	};
 }
 
-async function getChatMessagesController(chatId) {
-	const result = await chatService.fetchChatMessages(chatId);
+async function getChatMessagesController(chatId, payload = {}) {
+	const result = await chatService.fetchChatMessages(chatId, payload);
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -105,9 +276,13 @@ async function getChatMessagesController(chatId) {
 	};
 }
 
-async function sendMessageController(chatId, payload = {}) {
-	const result = await chatService.createMessageEntry({
+async function sendMessageController(chatId, payload = {}, authUserId = '') {
+	const mergedPayload = {
 		...payload,
+		senderId: payload.senderId || authUserId,
+	};
+	const result = await chatService.createMessageEntry({
+		...mergedPayload,
 		chatId,
 	});
 	if (!result.ok) {
@@ -123,6 +298,37 @@ async function sendMessageController(chatId, payload = {}) {
 		status: result.status,
 		body: {
 			message: result.data,
+		},
+	};
+}
+
+async function openOrCreateTaskChatController(payload = {}, authUserId = '') {
+	const hasCreateChatContract =
+		typeof payload.taskId === 'string' && typeof payload.participantUserId === 'string';
+
+	const result = hasCreateChatContract
+		? await chatService.openOrCreateChatEntry({
+				taskId: payload.taskId,
+				participantUserId: payload.participantUserId,
+		  })
+		: await chatService.openOrCreateTaskChatEntry({
+				...payload,
+				helperUserId: payload.helperUserId || authUserId,
+		  });
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				chat: null,
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			chat: result.data,
 		},
 	};
 }
@@ -149,11 +355,20 @@ async function parseVoiceTaskController(payload = {}) {
 
 module.exports = {
 	listTasksController,
+	listTasksWithFilterController,
+	getMyTaskHistoryController,
 	getTaskController,
 	createTaskController,
 	acceptTaskController,
+	requestTaskCompletionController,
+	confirmTaskCompletionController,
+	declineTaskCompletionController,
+	submitTaskRatingController,
+	completeTaskController,
+	cancelTaskController,
 	listChatsController,
 	getChatMessagesController,
 	sendMessageController,
+	openOrCreateTaskChatController,
 	parseVoiceTaskController,
 };

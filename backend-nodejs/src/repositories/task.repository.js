@@ -1,12 +1,29 @@
-const seedData = require('../../mock-data/seed-data');
-const {getFirestoreDb} = require('../config/firebase');
+const {getRequiredFirestoreDb} = require('../config/firebase');
 const {buildPrefixedId} = require('../utils/id.util');
 const {toTaskRecord, normalizeString} = require('../models/task.model');
+
+function normalizeExecutionMode(value) {
+	const normalized = normalizeString(value).toLowerCase();
+	return normalized === 'online' ? 'online' : 'offline';
+}
+
+function normalizeIsoString(value, fallback = '') {
+	const normalized = normalizeString(value);
+	return normalized || fallback;
+}
 
 function normalizeTaskRecord(record) {
 	if (!record || typeof record !== 'object') {
 		return null;
 	}
+
+	const acceptedByUserId = normalizeString(record.acceptedByUserId) || undefined;
+	const acceptedAt = normalizeString(record.acceptedAt) || undefined;
+	const completionRequestedByUserId = normalizeString(record.completionRequestedByUserId) || undefined;
+	const completionRequestedAt = normalizeString(record.completionRequestedAt) || undefined;
+	const completedByUserId = normalizeString(record.completedByUserId) || undefined;
+	const completedAt = normalizeString(record.completedAt) || undefined;
+	const ratedAt = normalizeString(record.ratedAt) || undefined;
 
 	return {
 		id: normalizeString(record.id),
@@ -17,20 +34,24 @@ function normalizeTaskRecord(record) {
 		location: normalizeString(record.location),
 		price: typeof record.price === 'number' ? record.price : 0,
 		distanceKm: typeof record.distanceKm === 'number' ? record.distanceKm : 0,
-		scheduledAt: normalizeString(record.scheduledAt),
-		executionMode: normalizeString(record.executionMode) || 'offline',
-		status: record.status === 'accepted' ? 'accepted' : 'open',
-		acceptedByUserId: normalizeString(record.acceptedByUserId) || undefined,
-		acceptedAt: normalizeString(record.acceptedAt) || undefined,
+		scheduledAt: normalizeIsoString(record.scheduledAt, new Date().toISOString()),
+		executionMode: normalizeExecutionMode(record.executionMode),
+		isActive: typeof record.isActive === 'boolean' ? record.isActive : true,
+		completionRequestedByUserId,
+		completionRequestedAt,
+		completedByUserId,
+		completedAt,
+		isRatingPending: typeof record.isRatingPending === 'boolean' ? record.isRatingPending : false,
+		completionRating: typeof record.completionRating === 'number' ? record.completionRating : undefined,
+		ratedAt,
+		acceptedByUserId,
+		acceptedAt,
+		status: normalizeString(record.status) || (acceptedByUserId ? 'accepted' : 'open'),
 	};
 }
 
 async function listTaskRecords() {
-	const db = getFirestoreDb();
-	if (!db) {
-		return seedData.tasks.map((task) => normalizeTaskRecord(task));
-	}
-
+	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('tasks').get();
 	return snapshot.docs.map((doc) => normalizeTaskRecord({id: doc.id, ...doc.data()}));
 }
@@ -41,11 +62,7 @@ async function getTaskRecordById(taskId) {
 		return null;
 	}
 
-	const db = getFirestoreDb();
-	if (!db) {
-		return normalizeTaskRecord(seedData.tasks.find((entry) => entry.id === normalizedTaskId));
-	}
-
+	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('tasks').doc(normalizedTaskId).get();
 	if (!snapshot.exists) {
 		return null;
@@ -76,21 +93,42 @@ async function createTask(input) {
 		location: normalizeString(input.location),
 		price: typeof input.price === 'number' ? input.price : 0,
 		distanceKm: typeof input.distanceKm === 'number' ? input.distanceKm : 0,
-		scheduledAt: normalizeString(input.scheduledAt),
-		executionMode: normalizeString(input.executionMode) || 'offline',
-		status: input.status === 'accepted' ? 'accepted' : 'open',
-		acceptedByUserId: normalizeString(input.acceptedByUserId) || undefined,
-		acceptedAt: normalizeString(input.acceptedAt) || undefined,
+		scheduledAt: normalizeIsoString(input.scheduledAt, new Date().toISOString()),
+		executionMode: normalizeExecutionMode(input.executionMode),
+		isActive: true,
+		completionRequestedByUserId: undefined,
+		completionRequestedAt: undefined,
+		completedByUserId: undefined,
+		completedAt: undefined,
+		isRatingPending: false,
+		completionRating: undefined,
+		ratedAt: undefined,
+		status: 'open',
+		acceptedByUserId: undefined,
+		acceptedAt: undefined,
 	});
 
-	const db = getFirestoreDb();
-	if (db) {
-		await db.collection('tasks').doc(created.id).set(created);
-	} else {
-		seedData.tasks.unshift(created);
-	}
+	const db = getRequiredFirestoreDb();
+	await db.collection('tasks').doc(created.id).set(created);
 
 	return toTaskRecord(created);
+}
+
+async function updateTaskRecord(taskId, updates = {}) {
+	const normalizedTaskId = normalizeString(taskId);
+	if (!normalizedTaskId) {
+		return null;
+	}
+
+	const db = getRequiredFirestoreDb();
+	const ref = db.collection('tasks').doc(normalizedTaskId);
+	const snapshot = await ref.get();
+	if (!snapshot.exists) {
+		return null;
+	}
+
+	await ref.set(updates, {merge: true});
+	return normalizeTaskRecord({id: snapshot.id, ...snapshot.data(), ...updates});
 }
 
 async function acceptTask(taskId, acceptedByUserId) {
@@ -100,38 +138,89 @@ async function acceptTask(taskId, acceptedByUserId) {
 		return null;
 	}
 
-	const db = getFirestoreDb();
-	if (!db) {
-		const task = seedData.tasks.find((entry) => entry.id === normalizedTaskId);
-		if (!task) {
-			return null;
-		}
-
-		task.status = 'accepted';
-		task.acceptedByUserId = acceptedBy;
-		task.acceptedAt = new Date().toISOString();
-		return toTaskRecord(normalizeTaskRecord(task));
-	}
-
-	const ref = db.collection('tasks').doc(normalizedTaskId);
-	const snapshot = await ref.get();
-	if (!snapshot.exists) {
-		return null;
-	}
-
 	const updates = {
 		status: 'accepted',
 		acceptedByUserId: acceptedBy,
 		acceptedAt: new Date().toISOString(),
 	};
-	await ref.set(updates, {merge: true});
-	return toTaskRecord(normalizeTaskRecord({id: snapshot.id, ...snapshot.data(), ...updates}));
+	return toTaskRecord(await updateTaskRecord(normalizedTaskId, updates));
+}
+
+async function requestTaskCompletion(taskId, helperUserId) {
+	const updates = {
+		completionRequestedByUserId: normalizeString(helperUserId),
+		completionRequestedAt: new Date().toISOString(),
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
+}
+
+async function confirmTaskCompletion(taskId) {
+	const current = await getTaskRecordById(taskId);
+	if (!current) {
+		return null;
+	}
+
+	const updates = {
+		isActive: false,
+		status: 'completed',
+		completedByUserId: current.completionRequestedByUserId || current.acceptedByUserId || undefined,
+		completedAt: new Date().toISOString(),
+		isRatingPending: true,
+		completionRequestedByUserId: null,
+		completionRequestedAt: null,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
+}
+
+async function declineTaskCompletion(taskId) {
+	const current = await getTaskRecordById(taskId);
+	if (!current) {
+		return null;
+	}
+
+	const updates = {
+		status: current.acceptedByUserId ? 'accepted' : 'open',
+		completionRequestedByUserId: null,
+		completionRequestedAt: null,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
+}
+
+async function submitTaskRating(taskId, rating) {
+	const updates = {
+		completionRating: Number(rating),
+		ratedAt: new Date().toISOString(),
+		isRatingPending: false,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
+}
+
+async function cancelTask(taskId) {
+	const updates = {
+		isActive: false,
+		status: 'cancelled',
+		completionRequestedByUserId: null,
+		completionRequestedAt: null,
+		isRatingPending: false,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
 }
 
 module.exports = {
 	listTasks,
 	getTaskById,
+	getTaskRecordById,
 	nextTaskId,
 	createTask,
 	acceptTask,
+	requestTaskCompletion,
+	confirmTaskCompletion,
+	declineTaskCompletion,
+	submitTaskRating,
+	cancelTask,
 };

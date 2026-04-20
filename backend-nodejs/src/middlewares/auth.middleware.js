@@ -1,4 +1,11 @@
-const MOCK_BEARER_PREFIX = 'bearer mock-token-';
+const fs = require('fs');
+const path = require('path');
+const admin = require('firebase-admin');
+
+let firebaseAuthInitState = {
+	initialized: false,
+	error: null,
+};
 
 function normalizeHeaders(headers) {
 	if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {
@@ -15,37 +22,131 @@ function normalizeHeaders(headers) {
 	return result;
 }
 
-function extractUserId(headers) {
-	const normalized = normalizeHeaders(headers);
-	const explicitUserId = normalized['x-user-id']?.trim();
-	if (explicitUserId) {
-		return explicitUserId;
+function getAuthMode() {
+	return 'firebase';
+}
+
+function parseServiceAccount(value) {
+	if (!value || typeof value !== 'string') {
+		return null;
 	}
 
+	try {
+		return JSON.parse(value);
+	} catch (_error) {
+		const possiblePath = path.resolve(value);
+		if (fs.existsSync(possiblePath)) {
+			try {
+				return JSON.parse(fs.readFileSync(possiblePath, 'utf8'));
+			} catch (_fileError) {
+				return null;
+			}
+		}
+	}
+
+	return null;
+}
+
+function initializeFirebaseAuth() {
+	if (firebaseAuthInitState.initialized) {
+		return true;
+	}
+
+	try {
+		if (!admin.apps.length) {
+			const options = {};
+			const projectId = String(process.env.FIREBASE_PROJECT_ID || '').trim();
+			if (projectId) {
+				options.projectId = projectId;
+			}
+
+			const serviceAccount = parseServiceAccount(process.env.FIREBASE_CREDENTIALS_JSON || '');
+			if (serviceAccount) {
+				options.credential = admin.credential.cert(serviceAccount);
+			} else {
+				options.credential = admin.credential.applicationDefault();
+			}
+
+			admin.initializeApp(options);
+		}
+
+		firebaseAuthInitState = {initialized: true, error: null};
+		return true;
+	} catch (error) {
+		firebaseAuthInitState = {
+			initialized: false,
+			error: error instanceof Error ? error.message : 'Failed to initialize Firebase auth.',
+		};
+		return false;
+	}
+}
+
+function extractBearerToken(headers) {
+	const normalized = normalizeHeaders(headers);
 	const authorization = normalized.authorization?.trim();
 	if (!authorization) {
 		return undefined;
 	}
 
-	if (authorization.toLowerCase().startsWith(MOCK_BEARER_PREFIX)) {
-		return authorization.slice(MOCK_BEARER_PREFIX.length).trim();
+	const bearerPrefix = 'bearer ';
+	if (!authorization.toLowerCase().startsWith(bearerPrefix)) {
+		return undefined;
 	}
 
-	return undefined;
+	const token = authorization.slice(bearerPrefix.length).trim();
+	return token || undefined;
 }
 
-function getAuthContext(input = {}) {
+async function extractFirebaseAuthContext(headers) {
+	const token = extractBearerToken(headers);
+	if (!token) {
+		return {
+			userId: undefined,
+			email: undefined,
+			name: undefined,
+		};
+	}
+
+	if (!initializeFirebaseAuth()) {
+		return {
+			userId: undefined,
+			email: undefined,
+			name: undefined,
+		};
+	}
+
+	try {
+		const decoded = await admin.auth().verifyIdToken(token, true);
+		return {
+			userId: typeof decoded.uid === 'string' ? decoded.uid : undefined,
+			email: typeof decoded.email === 'string' ? decoded.email : undefined,
+			name: typeof decoded.name === 'string' ? decoded.name : undefined,
+		};
+	} catch (_error) {
+		return {
+			userId: undefined,
+			email: undefined,
+			name: undefined,
+		};
+	}
+}
+
+async function getAuthContext(input = {}) {
 	const headers = input.headers || input;
-	const userId = extractUserId(headers);
+	const auth = await extractFirebaseAuthContext(headers);
+	const userId = auth.userId;
 
 	return {
+		authMode: getAuthMode(),
 		userId,
+		email: auth.email,
+		name: auth.name,
 		isAuthenticated: Boolean(userId),
 	};
 }
 
-function requireUser(input = {}) {
-	const authContext = getAuthContext(input);
+async function requireUser(input = {}) {
+	const authContext = await getAuthContext(input);
 	if (!authContext.userId) {
 		return {
 			ok: false,
@@ -65,20 +166,33 @@ function requireUser(input = {}) {
 	};
 }
 
-function authMiddleware(req, res, next) {
-	const authContext = getAuthContext(req?.headers || {});
-	req.auth = authContext;
+async function authMiddleware(req, res, next) {
+	const authContext = await getAuthContext(req?.headers || {});
+	if (req && typeof req === 'object') {
+		req.auth = authContext;
+	}
 	if (typeof next === 'function') {
 		next();
 	}
 	return authContext;
 }
 
+function getAuthDiagnostics() {
+	return {
+		mode: getAuthMode(),
+		firebaseInitialized: firebaseAuthInitState.initialized,
+		firebaseInitError: firebaseAuthInitState.error,
+	};
+}
+
 module.exports = {
-	MOCK_BEARER_PREFIX,
 	normalizeHeaders,
-	extractUserId,
+	extractUserId: async (headers) => (await extractFirebaseAuthContext(headers)).userId,
+	extractBearerToken,
+	extractFirebaseAuthContext,
 	getAuthContext,
 	requireUser,
 	authMiddleware,
+	getAuthDiagnostics,
+	getAuthMode,
 };

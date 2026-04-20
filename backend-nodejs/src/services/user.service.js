@@ -1,18 +1,17 @@
 const {
 	listPublicUsers,
-	findUserByEmail,
 	getPublicUserById: getPublicUserByIdFromRepository,
-	authenticateUser,
-	createUser,
+	getPrivateUserById: getPrivateUserByIdFromRepository,
+	upsertUserFromAuth,
 	updateUserProfile: updateUserProfileInRepository,
+	submitRatingForUser: submitRatingForUserInRepository,
 } = require('../repositories/user.repository');
 const {
 	validateCurrentUserPayload,
-	validateLoginPayload,
-	validateSignupPayload,
+	validateFirebaseAuthPayload,
+	validateUpdateProfilePayload,
 } = require('../validators/auth.validator');
 const {success, failure} = require('../utils/response.util');
-const {buildMockToken} = require('../utils/token.util');
 
 async function listUsers() {
 	return success(200, await listPublicUsers());
@@ -24,7 +23,7 @@ async function getCurrentUser(payload = {}) {
 		return failure(401, 'User is not authenticated.');
 	}
 
-	const user = await getPublicUserByIdFromRepository(validation.value.userId);
+	const user = await getPrivateUserByIdFromRepository(validation.value.userId);
 	if (!user) {
 		return failure(404, 'User not found.');
 	}
@@ -43,31 +42,31 @@ async function getPublicUserById(payload = {}) {
 }
 
 async function login(payload = {}) {
-	const validation = validateLoginPayload(payload);
+	const validation = validateFirebaseAuthPayload(payload);
 	if (!validation.valid) {
-		return failure(400, 'Email and password are required.');
+		return failure(401, 'User is not authenticated.');
 	}
 
-	const user = await authenticateUser(validation.value.email, validation.value.password);
-	if (!user) {
-		return failure(401, 'Invalid email or password.');
+	const upserted = await upsertUserFromAuth(validation.value);
+	if (!upserted.user) {
+		return failure(500, 'Failed to resolve authenticated user.');
 	}
 
-	return success(200, {user, token: buildMockToken(user.id)});
+	return success(200, {user: upserted.user, authProvider: 'firebase'});
 }
 
 async function signup(payload = {}) {
-	const validation = validateSignupPayload(payload);
+	const validation = validateFirebaseAuthPayload(payload);
 	if (!validation.valid) {
-		return failure(400, 'Name, location, email, and password are required.');
+		return failure(401, 'User is not authenticated.');
 	}
 
-	if (await findUserByEmail(validation.value.email)) {
-		return failure(409, 'Email already exists.');
+	const upserted = await upsertUserFromAuth(validation.value);
+	if (!upserted.user) {
+		return failure(500, 'Failed to resolve authenticated user.');
 	}
 
-	const user = await createUser(validation.value);
-	return success(201, {user, token: buildMockToken(user.id)});
+	return success(upserted.created ? 201 : 200, {user: upserted.user, authProvider: 'firebase'});
 }
 
 async function updateUserProfile(payload = {}, authUserId = '') {
@@ -76,7 +75,31 @@ async function updateUserProfile(payload = {}, authUserId = '') {
 		return failure(401, 'User is not authenticated.');
 	}
 
-	const updatedUser = await updateUserProfileInRepository(userId, payload);
+	const validation = validateUpdateProfilePayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'Invalid profile payload.');
+	}
+
+	const updatedUser = await updateUserProfileInRepository(userId, validation.value);
+	if (!updatedUser) {
+		return failure(404, 'User not found.');
+	}
+
+	return success(200, updatedUser);
+}
+
+async function submitRatingForUser(payload = {}) {
+	const targetUserId = typeof payload.targetUserId === 'string' ? payload.targetUserId.trim() : '';
+	const rating = payload.rating;
+
+	if (!targetUserId) {
+		return failure(400, 'targetUserId is required.');
+	}
+	if (typeof rating !== 'number' || Number.isNaN(rating) || rating < 1 || rating > 5) {
+		return failure(400, 'rating must be a number between 1 and 5.');
+	}
+
+	const updatedUser = await submitRatingForUserInRepository(targetUserId, rating);
 	if (!updatedUser) {
 		return failure(404, 'User not found.');
 	}
@@ -95,5 +118,6 @@ module.exports = {
 	login,
 	signup,
 	updateUserProfile,
+	submitRatingForUser,
 	logout,
 };

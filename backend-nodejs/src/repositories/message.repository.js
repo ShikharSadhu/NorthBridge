@@ -1,5 +1,4 @@
-const seedData = require('../../mock-data/seed-data');
-const {getFirestoreDb} = require('../config/firebase');
+const {getRequiredFirestoreDb} = require('../config/firebase');
 const {buildPrefixedId} = require('../utils/id.util');
 const {toMessageRecord, normalizeString} = require('../models/message.model');
 
@@ -14,6 +13,8 @@ function normalizeMessageRecord(record) {
 		taskId: normalizeString(record.taskId),
 		senderId: normalizeString(record.senderId),
 		text: normalizeString(record.text),
+		imageDataUrl: normalizeString(record.imageDataUrl) || undefined,
+		isPaymentRequest: Boolean(record.isPaymentRequest),
 		timestamp:
 			typeof record.timestamp === 'string' && record.timestamp.trim()
 				? record.timestamp.trim()
@@ -21,25 +22,69 @@ function normalizeMessageRecord(record) {
 	};
 }
 
-async function listMessageRecordsByChatId(chatId) {
+function parsePositiveInt(value, fallback) {
+	let numeric = value;
+	if (typeof value === 'string' && value.trim()) {
+		numeric = Number(value);
+	}
+
+	if (!Number.isInteger(numeric) || numeric <= 0) {
+		return fallback;
+	}
+
+	return numeric;
+}
+
+function sortMessagesByTimestamp(messages) {
+	return [...messages].sort((left, right) => {
+		const leftTime = Date.parse(left.timestamp);
+		const rightTime = Date.parse(right.timestamp);
+		return leftTime - rightTime;
+	});
+}
+
+function paginateMessages(messages, options = {}) {
+	const pageSize = parsePositiveInt(options.pageSize, 0);
+	if (!pageSize) {
+		return messages;
+	}
+
+	const page = parsePositiveInt(options.page, 1);
+	const start = (page - 1) * pageSize;
+	return messages.slice(start, start + pageSize);
+}
+
+async function listMessageRecordsByChatId(chatId, options = {}) {
 	const normalizedChatId = normalizeString(chatId);
 	if (!normalizedChatId) {
 		return [];
 	}
 
-	const db = getFirestoreDb();
-	if (!db) {
-		return seedData.messages
-			.filter((message) => message.chatId === normalizedChatId)
-			.map((message) => normalizeMessageRecord(message));
-	}
-
+	let records;
+	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('messages').where('chatId', '==', normalizedChatId).get();
-	return snapshot.docs.map((doc) => normalizeMessageRecord({id: doc.id, ...doc.data()}));
+	records = snapshot.docs.map((doc) => normalizeMessageRecord({id: doc.id, ...doc.data()}));
+
+	return paginateMessages(sortMessagesByTimestamp(records), options);
 }
 
-async function listMessagesByChatId(chatId) {
-	return (await listMessageRecordsByChatId(chatId)).map((message) => toMessageRecord(message));
+async function listMessagesByChatId(chatId, options = {}) {
+	return (await listMessageRecordsByChatId(chatId, options)).map((message) => toMessageRecord(message));
+}
+
+async function getMessageById(messageId) {
+	const normalizedMessageId = normalizeString(messageId);
+	if (!normalizedMessageId) {
+		return null;
+	}
+
+	const db = getRequiredFirestoreDb();
+	const snapshot = await db.collection('messages').doc(normalizedMessageId).get();
+	if (!snapshot.exists) {
+		return null;
+	}
+
+	return toMessageRecord(normalizeMessageRecord({id: snapshot.id, ...snapshot.data()}));
 }
 
 function nextMessageId() {
@@ -53,24 +98,23 @@ async function createMessage(input) {
 		taskId: normalizeString(input.taskId),
 		senderId: normalizeString(input.senderId),
 		text: normalizeString(input.text),
+		imageDataUrl: normalizeString(input.imageDataUrl) || undefined,
+		isPaymentRequest: Boolean(input.isPaymentRequest),
 		timestamp:
 			typeof input.timestamp === 'string' && input.timestamp.trim()
 				? input.timestamp.trim()
 				: new Date().toISOString(),
 	});
 
-	const db = getFirestoreDb();
-	if (db) {
-		await db.collection('messages').doc(created.id).set(created);
-	} else {
-		seedData.messages.push(created);
-	}
+	const db = getRequiredFirestoreDb();
+	await db.collection('messages').doc(created.id).set(created);
 
 	return toMessageRecord(created);
 }
 
 module.exports = {
 	listMessagesByChatId,
+	getMessageById,
 	nextMessageId,
 	createMessage,
 };

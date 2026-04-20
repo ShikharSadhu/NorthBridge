@@ -14,7 +14,6 @@ function printDevCheck() {
 		'src/services',
 		'src/triggers',
 		'src/utils',
-		'mock-data/seed-data.js',
 		'docs/api-contract.md',
 		'docs/migration-notes.md',
 	];

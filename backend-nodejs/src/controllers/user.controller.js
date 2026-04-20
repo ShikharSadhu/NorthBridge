@@ -95,6 +95,29 @@ async function updateUserProfileController(payload = {}, authUserId = '') {
 	};
 }
 
+async function submitUserRatingController(userId, payload = {}) {
+	const result = await userService.submitRatingForUser({
+		targetUserId: userId,
+		rating: payload.rating,
+	});
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				user: null,
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			user: result.data,
+		},
+	};
+}
+
 async function logoutController() {
 	const result = await userService.logout();
 	return {
@@ -110,5 +133,6 @@ module.exports = {
 	loginController,
 	signupController,
 	updateUserProfileController,
+	submitUserRatingController,
 	logoutController,
 };

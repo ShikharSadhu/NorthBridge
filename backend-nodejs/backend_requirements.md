@@ -22,8 +22,8 @@ It is based on a full read-only audit of:
 
 - Backend route/controller/service/repository structure exists and runs.
 - Async request flow is wired end-to-end.
-- Firestore path exists through a REST-based client with seed fallback.
-- Current auth is mock token extraction, not Firebase ID token verification.
+- Firestore path exists through a REST-based client.
+- Current auth verifies Firebase ID tokens and resolves the current user from token claims.
 
 ### 2.3 Important contract gaps
 
@@ -40,7 +40,7 @@ Status legend:
 
 | System | Current backend state | Status | Required work |
 | --- | --- | --- | --- |
-| 1. Authentication and session | login/signup/me/logout exist with mock bearer token parsing | Skeleton needs improvement | Verify Firebase ID tokens, derive user from token, remove trust in payload userId |
+| 1. Authentication and session | login/signup/me/logout exist with Firebase token verification | Implemented baseline | Complete Firebase-native signup/login profile bootstrap, improve auth diagnostics |
 | 2. User profile and identity | Public user fetch exists; profile patch only name/location/email | Skeleton needs improvement | Support bio, phoneNumber, skills, profileImageUrl, privatePaymentQrDataUrl, tasksDone mapping |
 | 3. Task posting and listing | list/get/create/accept implemented | Implemented baseline | Add query filtering, server sorting, pagination, stronger validation, ownership checks |
 | 4. Task lifecycle and history | accept is implemented; history computed on frontend only | Skeleton needs improvement | Add backend task history endpoint, completion/cancel states, payout-ready lifecycle |
@@ -319,7 +319,7 @@ Recommended approach:
 
 - Stabilize final contracts in backend responses.
 - Ensure Firestore mode is production-ready.
-- Keep seed fallback only for local dev.
+- Do not restore seed fallback runtime paths.
 
 ### Frontend work
 

@@ -1,3 +1,8 @@
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({path: path.resolve(__dirname, '../../.env'), quiet: true});
+
 const DEFAULT_PORT = 3000;
 
 function toNumber(value, fallback) {
@@ -25,6 +30,7 @@ function toBoolean(value, fallback = false) {
 function getEnvConfig(env = process.env) {
 	return {
 		nodeEnv: env.NODE_ENV || 'development',
+		authMode: env.AUTH_MODE || 'firebase',
 		port: toNumber(env.PORT, DEFAULT_PORT),
 		firebaseProjectId: env.FIREBASE_PROJECT_ID || '',
 		firebaseDatabaseURL: env.FIREBASE_DATABASE_URL || '',

@@ -1,22 +1,26 @@
-const seedData = require('../mock-data/seed-data');
+const {getRequiredFirestoreDb} = require('../src/config/firebase');
 
-function printSeedSummary() {
-	const summary = {
-		users: seedData.users.length,
-		tasks: seedData.tasks.length,
-		messages: seedData.messages.length,
-		chats: seedData.chats.length,
-	};
+async function printCollectionSummary() {
+	const db = getRequiredFirestoreDb();
+	const collections = ['users', 'tasks', 'messages', 'chats', 'reports'];
+	const counts = {};
 
-	process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-	return summary;
+	for (const name of collections) {
+		const snapshot = await db.collection(name).get();
+		counts[name] = snapshot.size;
+	}
+
+	process.stdout.write(`${JSON.stringify(counts, null, 2)}\n`);
+	return counts;
 }
 
 if (require.main === module) {
-	printSeedSummary();
+	printCollectionSummary().catch((error) => {
+		process.stderr.write(`${error.message}\n`);
+		process.exitCode = 1;
+	});
 }
 
 module.exports = {
-	seedData,
-	printSeedSummary,
+	printCollectionSummary,
 };

@@ -1,6 +1,6 @@
 # NorthBridge Backend
 
-This backend can run against the local seed data or against Firestore when the Firebase environment is configured.
+This backend runs against Firestore when the Firebase environment is configured.
 
 ## Firestore setup
 
@@ -24,5 +24,5 @@ Request `GET /v1/health` to confirm the backend is up. The response now includes
 
 ## Notes
 
-- When Firestore is not configured, the backend falls back to the seeded local data in `backend-nodejs/mock-data/seed-data.js`.
+- Firestore configuration is required for repository reads and writes.
 - The API route layer is async now so Firestore reads and writes can complete before the response is returned.

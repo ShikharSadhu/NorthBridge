@@ -1,33 +1,97 @@
-const {listChats, getChatById, updateChatLastMessage} = require('../repositories/chat.repository');
+const {
+	listChats,
+	listChatsByUserId,
+	getChatById,
+	getChatByTaskAndUsers,
+	createChat,
+	updateChatLastMessage,
+} = require('../repositories/chat.repository');
 const {listMessagesByChatId, createMessage} = require('../repositories/message.repository');
-const {validateSendMessagePayload} = require('../validators/chat.validator');
+const {getTaskById} = require('../repositories/task.repository');
+const {
+	validateSendMessagePayload,
+	validateTaskChatPayload,
+	validateCreateChatPayload,
+} = require('../validators/chat.validator');
 const {success, failure} = require('../utils/response.util');
 
-function fetchChats() {
-	return Promise.resolve(listChats()).then((chats) => success(200, chats));
+function parsePositiveInt(value, fallback) {
+	let numeric = value;
+	if (typeof value === 'string' && value.trim()) {
+		numeric = Number(value);
+	}
+
+	if (!Number.isInteger(numeric) || numeric <= 0) {
+		return fallback;
+	}
+
+	return numeric;
 }
 
-async function fetchChatMessages(chatId) {
+function sortChats(chats) {
+	return [...chats].sort((left, right) => {
+		const leftTs = left.updatedAt || left.lastMessage?.timestamp || '';
+		const rightTs = right.updatedAt || right.lastMessage?.timestamp || '';
+		return Date.parse(rightTs) - Date.parse(leftTs);
+	});
+}
+
+function paginateChats(chats, payload = {}) {
+	const pageSize = parsePositiveInt(payload.pageSize, 0);
+	if (!pageSize) {
+		return chats;
+	}
+
+	const page = parsePositiveInt(payload.page, 1);
+	const start = (page - 1) * pageSize;
+	return chats.slice(start, start + pageSize);
+}
+
+async function fetchChats(payload = {}) {
+	const userId = typeof payload.userId === 'string' ? payload.userId.trim() : '';
+	if (!userId) {
+		return failure(401, 'User is not authenticated.');
+	}
+
+	const chats = await listChatsByUserId(userId);
+	return success(200, paginateChats(sortChats(chats), payload));
+}
+
+async function fetchChatMessages(chatId, payload = {}) {
 	const chat = await getChatById(chatId);
 	if (!chat) {
 		return failure(404, 'Chat not found.');
 	}
 
+	const userId = typeof payload.userId === 'string' ? payload.userId.trim() : '';
+	if (!userId) {
+		return failure(401, 'User is not authenticated.');
+	}
+	if (!chat.users.includes(userId)) {
+		return failure(403, 'Only chat participants can view messages.');
+	}
+
 	return success(200, {
 		chat,
-		messages: await listMessagesByChatId(chatId),
+		messages: await listMessagesByChatId(chatId, {
+			page: payload.page,
+			pageSize: payload.pageSize,
+		}),
 	});
 }
 
 async function createMessageEntry(payload = {}) {
 	const validation = validateSendMessagePayload(payload);
 	if (!validation.valid) {
-		return failure(400, 'taskId and text are required.');
+		return failure(400, 'chatId, taskId, senderId, and text/imageDataUrl are required.');
 	}
 
 	const chat = await getChatById(validation.value.chatId);
 	if (!chat) {
 		return failure(404, 'Chat not found.');
+	}
+	if (!chat.users.includes(validation.value.senderId)) {
+		return failure(403, 'Only chat participants can send messages.');
 	}
 
 	const message = await createMessage(validation.value);
@@ -35,8 +99,76 @@ async function createMessageEntry(payload = {}) {
 	return success(201, message);
 }
 
+async function openOrCreateTaskChatEntry(payload = {}) {
+	const validation = validateTaskChatPayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'helperUserId and task details are required.');
+	}
+
+	const {task, helperUserId} = validation.value;
+	if (task.postedByUserId === helperUserId) {
+		return failure(400, 'Task owner and helper cannot be the same user.');
+	}
+
+	const existingChat = await getChatByTaskAndUsers(task.id, task.postedByUserId, helperUserId);
+	if (existingChat) {
+		return success(200, existingChat);
+	}
+
+	const chat = await createChat({
+		taskId: task.id,
+		taskTitle: task.title,
+		taskOwnerUserId: task.postedByUserId,
+		taskOwnerName: task.postedByName,
+		users: [task.postedByUserId, helperUserId],
+		lastMessage: {
+			id: '',
+			chatId: '',
+			taskId: task.id,
+			senderId: task.postedByUserId,
+			text: '',
+			timestamp: new Date().toISOString(),
+		},
+	});
+
+	const firstMessage = await createMessage({
+		chatId: chat.chatId,
+		taskId: task.id,
+		senderId: task.postedByUserId,
+		text: "Task accepted. Let's coordinate the details.",
+		timestamp: new Date().toISOString(),
+	});
+
+	const updated = await updateChatLastMessage(chat.chatId, firstMessage);
+	return success(201, updated);
+}
+
+async function openOrCreateChatEntry(payload = {}) {
+	const validation = validateCreateChatPayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'taskId and participantUserId are required.');
+	}
+
+	const task = await getTaskById(validation.value.taskId);
+	if (!task) {
+		return failure(404, 'Task not found.');
+	}
+
+	return openOrCreateTaskChatEntry({
+		helperUserId: validation.value.participantUserId,
+		task: {
+			id: task.id,
+			postedByUserId: task.postedByUserId,
+			postedByName: task.postedByName,
+			title: task.title,
+		},
+	});
+}
+
 module.exports = {
 	fetchChats,
 	fetchChatMessages,
 	createMessageEntry,
+	openOrCreateTaskChatEntry,
+	openOrCreateChatEntry,
 };

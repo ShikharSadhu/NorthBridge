@@ -7,6 +7,17 @@ function toTaskRecord(task) {
 		return null;
 	}
 
+	const acceptedByUserId = normalizeString(task.acceptedByUserId) || undefined;
+	const acceptedAt = normalizeString(task.acceptedAt) || undefined;
+	const completionRequestedByUserId = normalizeString(task.completionRequestedByUserId) || undefined;
+	const completionRequestedAt = normalizeString(task.completionRequestedAt) || undefined;
+	const completedByUserId = normalizeString(task.completedByUserId) || undefined;
+	const completedAt = normalizeString(task.completedAt) || undefined;
+	const ratedAt = normalizeString(task.ratedAt) || undefined;
+	const isActive = typeof task.isActive === 'boolean' ? task.isActive : true;
+	const isRatingPending = typeof task.isRatingPending === 'boolean' ? task.isRatingPending : false;
+	const completionRating = typeof task.completionRating === 'number' ? task.completionRating : undefined;
+
 	return {
 		id: normalizeString(task.id),
 		postedByUserId: normalizeString(task.postedByUserId),
@@ -18,9 +29,17 @@ function toTaskRecord(task) {
 		distanceKm: typeof task.distanceKm === 'number' ? task.distanceKm : 0,
 		scheduledAt: normalizeString(task.scheduledAt),
 		executionMode: normalizeString(task.executionMode) || 'offline',
-		status: task.status === 'accepted' ? 'accepted' : 'open',
-		acceptedByUserId: normalizeString(task.acceptedByUserId) || undefined,
-		acceptedAt: normalizeString(task.acceptedAt) || undefined,
+		isActive,
+		completionRequestedByUserId,
+		completionRequestedAt,
+		completedByUserId,
+		completedAt,
+		isRatingPending,
+		completionRating,
+		ratedAt,
+		acceptedByUserId,
+		acceptedAt,
+		status: normalizeString(task.status) || (acceptedByUserId ? 'accepted' : 'open'),
 	};
 }
 
@@ -36,7 +55,9 @@ function isValidTaskRecord(task) {
 			typeof task.price === 'number' &&
 			typeof task.distanceKm === 'number' &&
 				typeof task.scheduledAt === 'string' &&
-				typeof task.executionMode === 'string',
+				typeof task.executionMode === 'string' &&
+				typeof task.isActive === 'boolean' &&
+				typeof task.isRatingPending === 'boolean',
 	);
 }
 

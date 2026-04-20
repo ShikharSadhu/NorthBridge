@@ -4,6 +4,8 @@ const {taskRoutes} = require('./task.routes');
 const {chatRoutes} = require('./chat.routes');
 const {voiceRoutes} = require('./voice.routes');
 const {healthRoutes} = require('./health.routes');
+const {reportRoutes} = require('./report.routes');
+const {normalizeHeaders, getAuthContext} = require('../middlewares/auth.middleware');
 
 const routes = [
 	...healthRoutes,
@@ -12,6 +14,7 @@ const routes = [
 	...taskRoutes,
 	...chatRoutes,
 	...voiceRoutes,
+	...reportRoutes,
 ];
 
 function normalizeBody(body) {
@@ -20,40 +23,6 @@ function normalizeBody(body) {
 	}
 
 	return body;
-}
-
-function normalizeHeaders(headers) {
-	if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {
-		return {};
-	}
-
-	const result = {};
-	for (const [key, value] of Object.entries(headers)) {
-		if (typeof value === 'string') {
-			result[key.toLowerCase()] = value;
-		}
-	}
-
-	return result;
-}
-
-function extractUserId(headers) {
-	const explicitUserId = headers['x-user-id']?.trim();
-	if (explicitUserId) {
-		return explicitUserId;
-	}
-
-	const authorization = headers.authorization?.trim();
-	if (!authorization) {
-		return undefined;
-	}
-
-	const bearerPrefix = 'bearer mock-token-';
-	if (authorization.toLowerCase().startsWith(bearerPrefix)) {
-		return authorization.slice(bearerPrefix.length).trim();
-	}
-
-	return undefined;
 }
 
 function parseQuery(path) {
@@ -141,12 +110,17 @@ async function handleApiRequest(request) {
 	const query = parseQuery(path);
 	const normalizedBody = normalizeBody(request.body);
 	const normalizedHeaders = normalizeHeaders(request.headers);
-	const userId = extractUserId(normalizedHeaders);
+	const authContext = await getAuthContext(normalizedHeaders);
+	const userId = authContext.userId;
+	const authEmail = typeof authContext.email === 'string' ? authContext.email : undefined;
+	const authName = typeof authContext.name === 'string' ? authContext.name : undefined;
 
 	const payload = {
 		...query,
 		...normalizedBody,
 		...(userId ? {userId} : {}),
+		...(authEmail ? {authEmail} : {}),
+		...(authName ? {authName} : {}),
 	};
 
 	if (method !== 'GET' && method !== 'POST' && method !== 'PATCH') {
@@ -213,7 +187,7 @@ module.exports = {
 	listAvailableRoutes,
 	normalizeBody,
 	normalizeHeaders,
-	extractUserId,
+	extractUserId: async (headers) => (await getAuthContext(headers)).userId,
 	parseQuery,
 	matchRoutePath,
 };

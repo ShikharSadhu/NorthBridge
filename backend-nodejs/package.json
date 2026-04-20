@@ -9,6 +9,17 @@
 		"dev": "node scripts/dev.js",
 		"seed": "node scripts/seed.js",
 		"lint": "echo \"lint not configured yet\"",
-		"test": "echo \"tests not configured yet\""
+		"test": "jest --runInBand",
+		"test:watch": "jest --watch",
+		"test:contracts": "jest --runInBand tests/contracts.test.js",
+		"test:unit": "jest --runInBand tests/unit",
+		"test:integration": "jest --runInBand tests/integration"
+	},
+	"devDependencies": {
+		"jest": "^30.3.0"
+	},
+	"dependencies": {
+		"dotenv": "^17.4.2",
+		"firebase-admin": "^13.8.0"
 	}
 }

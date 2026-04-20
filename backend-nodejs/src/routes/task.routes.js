@@ -1,15 +1,55 @@
 const {
 	acceptTaskController,
+	confirmTaskCompletionController,
 	createTaskController,
+	declineTaskCompletionController,
+	completeTaskController,
+	cancelTaskController,
 	getTaskController,
-	listTasksController,
+	getMyTaskHistoryController,
+	listTasksWithFilterController,
+	requestTaskCompletionController,
+	submitTaskRatingController,
 } = require('../controllers/task.controller');
 
 const taskRoutes = [
 	{
 		method: 'GET',
 		path: '/v1/tasks',
-		execute: () => listTasksController(),
+		execute: (_params, body) =>
+			listTasksWithFilterController({
+				sortBy: typeof body.sortBy === 'string' ? body.sortBy : undefined,
+				executionMode: typeof body.executionMode === 'string' ? body.executionMode : undefined,
+				status: typeof body.status === 'string' ? body.status : undefined,
+				minPrice:
+					typeof body.minPrice === 'number' || typeof body.minPrice === 'string'
+						? body.minPrice
+						: undefined,
+				maxPrice:
+					typeof body.maxPrice === 'number' || typeof body.maxPrice === 'string'
+						? body.maxPrice
+						: undefined,
+				page:
+					typeof body.page === 'number' || typeof body.page === 'string' ? body.page : undefined,
+				pageSize:
+					typeof body.pageSize === 'number' || typeof body.pageSize === 'string'
+						? body.pageSize
+						: undefined,
+			}),
+	},
+	{
+		method: 'GET',
+		path: '/v1/tasks/history/me',
+		execute: (_params, body, userId) =>
+			getMyTaskHistoryController(userId, {
+				sortBy: typeof body.sortBy === 'string' ? body.sortBy : undefined,
+				page:
+					typeof body.page === 'number' || typeof body.page === 'string' ? body.page : undefined,
+				pageSize:
+					typeof body.pageSize === 'number' || typeof body.pageSize === 'string'
+						? body.pageSize
+						: undefined,
+			}),
 	},
 	{
 		method: 'GET',
@@ -39,6 +79,63 @@ const taskRoutes = [
 			acceptTaskController(params.taskId, {
 				acceptedByUserId:
 					typeof body.acceptedByUserId === 'string' ? body.acceptedByUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/completion/request',
+		execute: (params, body, userId) =>
+			requestTaskCompletionController(params.taskId, {
+				helperUserId: typeof body.helperUserId === 'string' ? body.helperUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/completion/confirm',
+		execute: (params, body, userId) =>
+			confirmTaskCompletionController(params.taskId, {
+				ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/completion/decline',
+		execute: (params, body, userId) =>
+			declineTaskCompletionController(params.taskId, {
+				ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/complete',
+		execute: (params, body, userId) =>
+			completeTaskController(
+				params.taskId,
+				{
+					ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+				},
+				userId,
+			),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/cancel',
+		execute: (params, body, userId) =>
+			cancelTaskController(
+				params.taskId,
+				{
+					ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+				},
+				userId,
+			),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/rating',
+		execute: (params, body, userId) =>
+			submitTaskRatingController(params.taskId, {
+				ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+				rating: typeof body.rating === 'number' ? body.rating : undefined,
 			}, userId),
 	},
 ];
