@@ -6,7 +6,9 @@
 	"main": "src/index.js",
 	"type": "commonjs",
 	"scripts": {
-		"dev": "node scripts/dev.js",
+		"dev": "node scripts/dev-start.js",
+		"dev:check": "node scripts/dev.js",
+		"start": "node src/server.js",
 		"seed": "node scripts/seed.js",
 		"lint": "echo \"lint not configured yet\"",
 		"test": "jest --runInBand",

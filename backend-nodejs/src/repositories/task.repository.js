@@ -12,6 +12,20 @@ function normalizeIsoString(value, fallback = '') {
 	return normalized || fallback;
 }
 
+function normalizeGeoPoint(value) {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) {
+		return undefined;
+	}
+
+	const lat = typeof value.lat === 'number' ? value.lat : undefined;
+	const lng = typeof value.lng === 'number' ? value.lng : undefined;
+	if (typeof lat !== 'number' || Number.isNaN(lat) || typeof lng !== 'number' || Number.isNaN(lng)) {
+		return undefined;
+	}
+
+	return {lat, lng};
+}
+
 function normalizeTaskRecord(record) {
 	if (!record || typeof record !== 'object') {
 		return null;
@@ -34,6 +48,7 @@ function normalizeTaskRecord(record) {
 		location: normalizeString(record.location),
 		price: typeof record.price === 'number' ? record.price : 0,
 		distanceKm: typeof record.distanceKm === 'number' ? record.distanceKm : 0,
+		locationGeo: normalizeGeoPoint(record.locationGeo),
 		scheduledAt: normalizeIsoString(record.scheduledAt, new Date().toISOString()),
 		executionMode: normalizeExecutionMode(record.executionMode),
 		isActive: typeof record.isActive === 'boolean' ? record.isActive : true,
@@ -93,6 +108,7 @@ async function createTask(input) {
 		location: normalizeString(input.location),
 		price: typeof input.price === 'number' ? input.price : 0,
 		distanceKm: typeof input.distanceKm === 'number' ? input.distanceKm : 0,
+		locationGeo: normalizeGeoPoint(input.locationGeo),
 		scheduledAt: normalizeIsoString(input.scheduledAt, new Date().toISOString()),
 		executionMode: normalizeExecutionMode(input.executionMode),
 		isActive: true,

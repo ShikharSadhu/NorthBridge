@@ -1,5 +1,29 @@
 import 'package:frontend/models/task_mode.dart';
 
+class TaskLocationGeo {
+  const TaskLocationGeo({
+    required this.lat,
+    required this.lng,
+  });
+
+  final double lat;
+  final double lng;
+
+  factory TaskLocationGeo.fromJson(Map<String, dynamic> json) {
+    return TaskLocationGeo(
+      lat: (json['lat'] as num).toDouble(),
+      lng: (json['lng'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'lat': lat,
+      'lng': lng,
+    };
+  }
+}
+
 class TaskModel {
   const TaskModel({
     required this.id,
@@ -22,6 +46,7 @@ class TaskModel {
     this.ratedAt,
     this.acceptedByUserId,
     this.acceptedAt,
+    this.locationGeo,
   });
 
   final String id;
@@ -44,6 +69,7 @@ class TaskModel {
   final DateTime? ratedAt;
   final String? acceptedByUserId;
   final DateTime? acceptedAt;
+  final TaskLocationGeo? locationGeo;
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
     return TaskModel(
@@ -77,6 +103,10 @@ class TaskModel {
       acceptedAt: (json['acceptedAt'] as String?) == null
           ? null
           : DateTime.parse(json['acceptedAt'] as String),
+        locationGeo:
+          json['locationGeo'] is Map<String, dynamic>
+            ? TaskLocationGeo.fromJson(json['locationGeo'] as Map<String, dynamic>)
+            : null,
     );
   }
 
@@ -101,6 +131,7 @@ class TaskModel {
     DateTime? ratedAt,
     String? acceptedByUserId,
     DateTime? acceptedAt,
+    TaskLocationGeo? locationGeo,
     bool clearAcceptance = false,
     bool clearCompletionRequest = false,
   }) {
@@ -130,6 +161,7 @@ class TaskModel {
       acceptedByUserId:
           clearAcceptance ? null : (acceptedByUserId ?? this.acceptedByUserId),
       acceptedAt: clearAcceptance ? null : (acceptedAt ?? this.acceptedAt),
+      locationGeo: locationGeo ?? this.locationGeo,
     );
   }
 
@@ -155,6 +187,7 @@ class TaskModel {
       'ratedAt': ratedAt?.toIso8601String(),
       'acceptedByUserId': acceptedByUserId,
       'acceptedAt': acceptedAt?.toIso8601String(),
+      'locationGeo': locationGeo?.toJson(),
     };
   }
 }

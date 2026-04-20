@@ -35,6 +35,14 @@ const taskRoutes = [
 					typeof body.pageSize === 'number' || typeof body.pageSize === 'string'
 						? body.pageSize
 						: undefined,
+				acceptorLat:
+					typeof body.acceptorLat === 'number' || typeof body.acceptorLat === 'string'
+						? body.acceptorLat
+						: undefined,
+				acceptorLng:
+					typeof body.acceptorLng === 'number' || typeof body.acceptorLng === 'string'
+						? body.acceptorLng
+						: undefined,
 			}),
 	},
 	{
@@ -54,7 +62,17 @@ const taskRoutes = [
 	{
 		method: 'GET',
 		path: '/v1/tasks/:taskId',
-		execute: (params) => getTaskController(params.taskId),
+		execute: (params, body) =>
+			getTaskController(params.taskId, {
+				acceptorLat:
+					typeof body.acceptorLat === 'number' || typeof body.acceptorLat === 'string'
+						? body.acceptorLat
+						: undefined,
+				acceptorLng:
+					typeof body.acceptorLng === 'number' || typeof body.acceptorLng === 'string'
+						? body.acceptorLng
+						: undefined,
+			}),
 	},
 	{
 		method: 'POST',
@@ -67,6 +85,13 @@ const taskRoutes = [
 				price: typeof body.price === 'number' ? body.price : undefined,
 				scheduledAt: typeof body.scheduledAt === 'string' ? body.scheduledAt : undefined,
 				executionMode: typeof body.executionMode === 'string' ? body.executionMode : undefined,
+				locationGeo:
+					body.locationGeo && typeof body.locationGeo === 'object' && !Array.isArray(body.locationGeo)
+						? {
+								lat: typeof body.locationGeo.lat === 'number' ? body.locationGeo.lat : undefined,
+								lng: typeof body.locationGeo.lng === 'number' ? body.locationGeo.lng : undefined,
+						  }
+						: undefined,
 				postedByUserId:
 					typeof body.postedByUserId === 'string' ? body.postedByUserId : undefined,
 				postedByName: typeof body.postedByName === 'string' ? body.postedByName : undefined,

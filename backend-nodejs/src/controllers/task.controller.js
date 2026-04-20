@@ -58,8 +58,8 @@ async function getMyTaskHistoryController(authUserId = '', payload = {}) {
 	};
 }
 
-async function getTaskController(taskId) {
-	const result = await taskService.fetchTaskById(taskId);
+async function getTaskController(taskId, payload = {}) {
+	const result = await taskService.fetchTaskById(taskId, payload);
 	return {
 		status: result.status,
 		body: toEntityBody(result, 'task'),

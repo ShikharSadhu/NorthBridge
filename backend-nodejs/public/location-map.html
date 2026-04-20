@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NorthBridge Task Location Picker</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #0f172a;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      min-height: 100vh;
+    }
+
+    .panel {
+      padding: 16px;
+      border-right: 1px solid #dce4f0;
+      background: #ffffff;
+      overflow-y: auto;
+    }
+
+    .panel h1 {
+      font-size: 20px;
+      margin: 0 0 8px;
+    }
+
+    .panel p {
+      margin: 0 0 12px;
+      color: #334155;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .group {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid #dce4f0;
+      border-radius: 10px;
+      background: #f8fbff;
+    }
+
+    .group h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #1e293b;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #bfd0ea;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      background: #0f766e;
+      color: white;
+    }
+
+    button.secondary {
+      background: #0369a1;
+    }
+
+    code {
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f172a;
+      color: #d1fae5;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    #map {
+      min-height: 100vh;
+    }
+
+    .muted {
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      #map {
+        min-height: 60vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel">
+      <h1>Task Location Picker</h1>
+      <p>Click on map to set task location (OpenStreetMap + Leaflet). Use acceptor coordinates to preview distance.</p>
+
+      <section class="group">
+        <h2>Task Location</h2>
+        <div class="row">
+          <div>
+            <label for="taskLat">Task Lat</label>
+            <input id="taskLat" type="number" step="any" />
+          </div>
+          <div>
+            <label for="taskLng">Task Lng</label>
+            <input id="taskLng" type="number" step="any" />
+          </div>
+        </div>
+        <button id="setTaskPoint" type="button">Set Marker From Inputs</button>
+        <p class="muted" id="taskLabel">No location selected yet.</p>
+      </section>
+
+      <section class="group">
+        <h2>Acceptor Location</h2>
+        <div class="row">
+          <div>
+            <label for="acceptorLat">Acceptor Lat</label>
+            <input id="acceptorLat" type="number" step="any" />
+          </div>
+          <div>
+            <label for="acceptorLng">Acceptor Lng</label>
+            <input id="acceptorLng" type="number" step="any" />
+          </div>
+        </div>
+        <button id="calcDistance" class="secondary" type="button">Calculate Distance</button>
+        <p class="muted" id="distanceResult">Distance not calculated.</p>
+      </section>
+
+      <section class="group">
+        <h2>Task Payload Example</h2>
+        <p class="muted">Use this JSON in <code>POST /v1/tasks</code>.</p>
+        <code id="payloadPreview">{}</code>
+      </section>
+    </aside>
+    <main id="map"></main>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    const map = L.map('map').setView([28.6139, 77.209], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+
+    const taskLatInput = document.getElementById('taskLat');
+    const taskLngInput = document.getElementById('taskLng');
+    const acceptorLatInput = document.getElementById('acceptorLat');
+    const acceptorLngInput = document.getElementById('acceptorLng');
+    const payloadPreview = document.getElementById('payloadPreview');
+    const taskLabel = document.getElementById('taskLabel');
+    const distanceResult = document.getElementById('distanceResult');
+
+    let marker = null;
+
+    function readNumber(input) {
+      const value = Number(input.value);
+      return Number.isFinite(value) ? value : null;
+    }
+
+    function isValidPoint(lat, lng) {
+      return (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180
+      );
+    }
+
+    function toRadians(value) {
+      return (value * Math.PI) / 180;
+    }
+
+    function calculateDistanceKm(from, to) {
+      const earthRadiusKm = 6371;
+      const dLat = toRadians(to.lat - from.lat);
+      const dLng = toRadians(to.lng - from.lng);
+      const fromLatRad = toRadians(from.lat);
+      const toLatRad = toRadians(to.lat);
+
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(dLng / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(earthRadiusKm * c * 10) / 10;
+    }
+
+    function updatePayloadPreview() {
+      const taskLat = readNumber(taskLatInput);
+      const taskLng = readNumber(taskLngInput);
+      const payload = {
+        title: 'Sample Task',
+        description: 'Task created from map selection',
+        location: 'Picked on map',
+        price: 100,
+        scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+        executionMode: 'offline',
+      };
+
+      if (isValidPoint(taskLat, taskLng)) {
+        payload.locationGeo = { lat: taskLat, lng: taskLng };
+      }
+
+      payloadPreview.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    function placeTaskMarker(lat, lng) {
+      if (!isValidPoint(lat, lng)) {
+        return;
+      }
+
+      taskLatInput.value = String(lat);
+      taskLngInput.value = String(lng);
+
+      if (marker) {
+        marker.setLatLng([lat, lng]);
+      } else {
+        marker = L.marker([lat, lng]).addTo(map);
+      }
+
+      marker.bindPopup(`Task location\nLat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`).openPopup();
+      taskLabel.textContent = `Task location set at (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+      updatePayloadPreview();
+    }
+
+    map.on('click', (event) => {
+      placeTaskMarker(event.latlng.lat, event.latlng.lng);
+    });
+
+    document.getElementById('setTaskPoint').addEventListener('click', () => {
+      const lat = readNumber(taskLatInput);
+      const lng = readNumber(taskLngInput);
+      if (!isValidPoint(lat, lng)) {
+        taskLabel.textContent = 'Invalid task coordinates.';
+        return;
+      }
+
+      placeTaskMarker(lat, lng);
+      map.setView([lat, lng], Math.max(map.getZoom(), 14));
+    });
+
+    document.getElementById('calcDistance').addEventListener('click', () => {
+      const taskLat = readNumber(taskLatInput);
+      const taskLng = readNumber(taskLngInput);
+      const acceptorLat = readNumber(acceptorLatInput);
+      const acceptorLng = readNumber(acceptorLngInput);
+
+      if (!isValidPoint(taskLat, taskLng) || !isValidPoint(acceptorLat, acceptorLng)) {
+        distanceResult.textContent = 'Provide valid task and acceptor coordinates first.';
+        return;
+      }
+
+      const distanceKm = calculateDistanceKm(
+        { lat: acceptorLat, lng: acceptorLng },
+        { lat: taskLat, lng: taskLng }
+      );
+
+      distanceResult.textContent = `Distance from acceptor to task: ${distanceKm} km`;
+    });
+
+    updatePayloadPreview();
+  </script>
+</body>
+</html>

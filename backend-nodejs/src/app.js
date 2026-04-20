@@ -1,4 +1,43 @@
 const {handleApiRequest, listAvailableRoutes} = require('./routes');
+const fs = require('fs');
+const path = require('path');
+
+const PUBLIC_DIR = path.resolve(__dirname, '../public');
+
+function tryServeStatic(pathname, res) {
+	const safePath = pathname.replace(/\?.*$/, '').replace(/^\/+/, '');
+	if (!safePath) {
+		return false;
+	}
+
+	const resolvedPath = path.resolve(PUBLIC_DIR, safePath);
+	if (!resolvedPath.startsWith(PUBLIC_DIR)) {
+		return false;
+	}
+
+	if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+		return false;
+	}
+
+	const ext = path.extname(resolvedPath).toLowerCase();
+	const contentTypeByExt = {
+		'.html': 'text/html; charset=utf-8',
+		'.css': 'text/css; charset=utf-8',
+		'.js': 'application/javascript; charset=utf-8',
+		'.json': 'application/json; charset=utf-8',
+		'.png': 'image/png',
+		'.jpg': 'image/jpeg',
+		'.jpeg': 'image/jpeg',
+		'.svg': 'image/svg+xml',
+	};
+
+	const content = fs.readFileSync(resolvedPath);
+	res.statusCode = 200;
+	res.setHeader('Content-Type', contentTypeByExt[ext] || 'application/octet-stream');
+	res.setHeader('Content-Length', content.length);
+	res.end(content);
+	return true;
+}
 
 function parseJsonBody(rawBody) {
 	if (!rawBody || !rawBody.trim()) {
@@ -47,6 +86,19 @@ function createAppHandler() {
 	return async function appHandler(req, res) {
 		const method = String(req.method || '').toUpperCase();
 		const path = typeof req.url === 'string' ? req.url : '/';
+
+		if (method === 'GET' && path.split('?')[0] === '/location-map') {
+			if (tryServeStatic('location-map.html', res)) {
+				return;
+			}
+		}
+
+		if (method === 'GET' && path.split('?')[0].startsWith('/public/')) {
+			const relative = path.split('?')[0].replace('/public/', '');
+			if (tryServeStatic(relative, res)) {
+				return;
+			}
+		}
 
 		if (method === 'GET' && path.split('?')[0] === '/v1/routes') {
 			writeJson(res, 200, {routes: listAvailableRoutes()});

@@ -12,12 +12,23 @@ function createValidationResult(valid, value, errors) {
 
 function validateCreateTaskPayload(payload = {}) {
 	const executionMode = normalizeString(payload.executionMode).toLowerCase();
+	const rawLocationGeo =
+		payload.locationGeo && typeof payload.locationGeo === 'object' && !Array.isArray(payload.locationGeo)
+			? payload.locationGeo
+			: null;
+	const locationGeo = rawLocationGeo
+		? {
+				lat: typeof rawLocationGeo.lat === 'number' ? rawLocationGeo.lat : undefined,
+				lng: typeof rawLocationGeo.lng === 'number' ? rawLocationGeo.lng : undefined,
+		  }
+		: undefined;
 	const value = {
 		title: normalizeString(payload.title),
 		description: normalizeString(payload.description),
 		location: normalizeString(payload.location),
 		price: payload.price,
 		distanceKm: typeof payload.distanceKm === 'number' ? payload.distanceKm : 0,
+		locationGeo,
 		scheduledAt: normalizeString(payload.scheduledAt),
 		executionMode: executionMode || 'offline',
 		postedByUserId: normalizeString(payload.postedByUserId) || 'u_1001',
@@ -39,6 +50,24 @@ function validateCreateTaskPayload(payload = {}) {
 	}
 	if (!value.scheduledAt) {
 		errors.push({field: 'scheduledAt', message: 'scheduledAt is required.'});
+	}
+	if (value.locationGeo) {
+		if (
+			typeof value.locationGeo.lat !== 'number' ||
+			Number.isNaN(value.locationGeo.lat) ||
+			value.locationGeo.lat < -90 ||
+			value.locationGeo.lat > 90
+		) {
+			errors.push({field: 'locationGeo.lat', message: 'locationGeo.lat must be between -90 and 90.'});
+		}
+		if (
+			typeof value.locationGeo.lng !== 'number' ||
+			Number.isNaN(value.locationGeo.lng) ||
+			value.locationGeo.lng < -180 ||
+			value.locationGeo.lng > 180
+		) {
+			errors.push({field: 'locationGeo.lng', message: 'locationGeo.lng must be between -180 and 180.'});
+		}
 	}
 	if (value.executionMode !== 'online' && value.executionMode !== 'offline') {
 		errors.push({field: 'executionMode', message: 'executionMode must be online or offline.'});

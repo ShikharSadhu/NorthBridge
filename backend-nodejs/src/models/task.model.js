@@ -2,6 +2,23 @@ function normalizeString(value) {
 	return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeGeoPoint(point) {
+	if (!point || typeof point !== 'object' || Array.isArray(point)) {
+		return undefined;
+	}
+
+	const lat = typeof point.lat === 'number' ? point.lat : undefined;
+	const lng = typeof point.lng === 'number' ? point.lng : undefined;
+	if (typeof lat !== 'number' || Number.isNaN(lat) || typeof lng !== 'number' || Number.isNaN(lng)) {
+		return undefined;
+	}
+
+	return {
+		lat,
+		lng,
+	};
+}
+
 function toTaskRecord(task) {
 	if (!task || typeof task !== 'object') {
 		return null;
@@ -27,6 +44,7 @@ function toTaskRecord(task) {
 		location: normalizeString(task.location),
 		price: typeof task.price === 'number' ? task.price : 0,
 		distanceKm: typeof task.distanceKm === 'number' ? task.distanceKm : 0,
+		locationGeo: normalizeGeoPoint(task.locationGeo),
 		scheduledAt: normalizeString(task.scheduledAt),
 		executionMode: normalizeString(task.executionMode) || 'offline',
 		isActive,
@@ -54,6 +72,10 @@ function isValidTaskRecord(task) {
 			typeof task.location === 'string' &&
 			typeof task.price === 'number' &&
 			typeof task.distanceKm === 'number' &&
+			(typeof task.locationGeo === 'undefined' ||
+				(task.locationGeo &&
+					typeof task.locationGeo.lat === 'number' &&
+					typeof task.locationGeo.lng === 'number')) &&
 				typeof task.scheduledAt === 'string' &&
 				typeof task.executionMode === 'string' &&
 				typeof task.isActive === 'boolean' &&
@@ -63,6 +85,7 @@ function isValidTaskRecord(task) {
 
 module.exports = {
 	normalizeString,
+	normalizeGeoPoint,
 	toTaskRecord,
 	isValidTaskRecord,
 };

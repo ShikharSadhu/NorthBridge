@@ -54,6 +54,8 @@ class TaskProvider extends ChangeNotifier {
   bool _isCreating = false;
   List<TaskSortOptionModel> _sortOptions = const [];
   TaskSortType? _selectedSort;
+  double? _acceptorLat;
+  double? _acceptorLng;
 
   ViewState<List<TaskModel>> get state => _state;
   List<TaskModel> get tasks => _state.data ?? const [];
@@ -70,6 +72,15 @@ class TaskProvider extends ChangeNotifier {
       return null;
     }
     return selected.first.label;
+  }
+
+  double? get acceptorLat => _acceptorLat;
+  double? get acceptorLng => _acceptorLng;
+
+  void setAcceptorLocation({double? lat, double? lng}) {
+    _acceptorLat = lat;
+    _acceptorLng = lng;
+    _taskService.setAcceptorLocation(lat: lat, lng: lng);
   }
 
   Future<void> loadTasks() async {

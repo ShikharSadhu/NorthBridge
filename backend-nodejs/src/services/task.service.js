@@ -17,6 +17,7 @@ const {
 	validateSubmitTaskRatingPayload,
 } = require('../validators/task.validator');
 const {success, failure} = require('../utils/response.util');
+const {isValidGeoPoint, calculateRoundedDistanceKm} = require('../utils/geo.utils');
 
 function parseNumber(value) {
 	if (typeof value === 'number' && Number.isFinite(value)) {
@@ -123,9 +124,58 @@ function sortTasks(tasks, sortBy) {
 	}
 }
 
+function parseGeoCoordinate(value) {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return value;
+	}
+
+	if (typeof value === 'string' && value.trim()) {
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+function resolveAcceptorPoint(payload = {}) {
+	const lat = parseGeoCoordinate(payload.acceptorLat);
+	const lng = parseGeoCoordinate(payload.acceptorLng);
+	const point = {lat, lng};
+	return isValidGeoPoint(point) ? point : null;
+}
+
+function applyAcceptorDistance(task, acceptorPoint) {
+	if (!task || typeof task !== 'object') {
+		return task;
+	}
+
+	if (!acceptorPoint || !isValidGeoPoint(acceptorPoint)) {
+		return task;
+	}
+
+	if (!isValidGeoPoint(task.locationGeo)) {
+		return task;
+	}
+
+	return {
+		...task,
+		distanceKm: calculateRoundedDistanceKm(acceptorPoint, task.locationGeo, 1),
+	};
+}
+
+function applyAcceptorDistanceToList(tasks, payload = {}) {
+	const acceptorPoint = resolveAcceptorPoint(payload);
+	if (!acceptorPoint) {
+		return tasks;
+	}
+
+	return tasks.map((task) => applyAcceptorDistance(task, acceptorPoint));
+}
+
 function fetchTasks(payload = {}) {
 	return Promise.resolve(listTasks()).then((tasks) => {
-		const filtered = filterTasks(tasks, payload);
+		const withDistance = applyAcceptorDistanceToList(tasks, payload);
+		const filtered = filterTasks(withDistance, payload);
 		const sorted = sortTasks(filtered, payload.sortBy);
 		return success(200, paginateTasks(sorted, payload));
 	});
@@ -138,20 +188,21 @@ async function fetchMyTaskHistory(payload = {}) {
 	}
 
 	const tasks = await listTasks();
-	const history = tasks.filter(
+	const withDistance = applyAcceptorDistanceToList(tasks, payload);
+	const history = withDistance.filter(
 		(task) => task.acceptedByUserId === userId || task.postedByUserId === userId,
 	);
 	const sorted = sortTasks(history, payload.sortBy || 'latestDate');
 	return success(200, paginateTasks(sorted, payload));
 }
 
-async function fetchTaskById(taskId) {
+async function fetchTaskById(taskId, payload = {}) {
 	const task = await getTaskById(taskId);
 	if (!task) {
 		return failure(404, 'Task not found.');
 	}
 
-	return success(200, task);
+	return success(200, applyAcceptorDistance(task, resolveAcceptorPoint(payload)));
 }
 
 async function createTaskEntry(payload = {}) {

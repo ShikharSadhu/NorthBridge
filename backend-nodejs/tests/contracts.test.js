@@ -75,6 +75,12 @@ describe('Data contract snapshots', () => {
 				expect(typeof task.scheduledAt).toBe('string');
 				expect(typeof task.price).toBe('number');
 				expect(typeof task.distanceKm).toBe('number');
+				if (task.locationGeo) {
+					expect(task.locationGeo).toHaveProperty('lat');
+					expect(task.locationGeo).toHaveProperty('lng');
+					expect(typeof task.locationGeo.lat).toBe('number');
+					expect(typeof task.locationGeo.lng).toBe('number');
+				}
 			}
 		});
 
