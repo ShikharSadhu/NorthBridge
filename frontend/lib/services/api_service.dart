@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 enum ApiHttpMethod {
@@ -49,7 +49,7 @@ class ApiService {
 
 	static const String _defaultBaseUrl = String.fromEnvironment(
 		'NB_API_BASE_URL',
-		defaultValue: 'http://localhost:3000',
+		defaultValue: '',
 	);
 
 	final String _baseUrl;
@@ -145,7 +145,7 @@ class ApiService {
 				headers: resolvedHeaders,
 				encodedBody: encodedBody,
 			).timeout(_timeout);
-		} on SocketException catch (error) {
+		} on http.ClientException catch (error) {
 			throw ApiException(
 				message: 'Unable to connect to API server.',
 				uri: uri,
@@ -248,6 +248,14 @@ class ApiService {
 	}
 
 	static String _sanitizeBaseUrl(String baseUrl) {
+		if (baseUrl.trim().isEmpty) {
+			if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+				return 'http://10.0.2.2:3000';
+			}
+
+			return 'http://localhost:3000';
+		}
+
 		return baseUrl.endsWith('/')
 				? baseUrl.substring(0, baseUrl.length - 1)
 				: baseUrl;

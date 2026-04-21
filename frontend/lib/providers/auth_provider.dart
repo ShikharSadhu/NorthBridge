@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:frontend/core/state/view_state.dart';
 import 'package:frontend/models/user_model.dart';
+import 'package:frontend/services/api_service.dart';
 import 'package:frontend/services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -15,6 +16,10 @@ class AuthProvider extends ChangeNotifier {
   bool _isMutating = false;
   bool get isMutating => _isMutating;
 
+  void setSessionToken(String? idToken) {
+    _authService.setSessionToken(idToken);
+  }
+
   Future<void> loadCurrentUser() async {
     _state = ViewState<UserModel>.loading(previousData: _state.data);
     notifyListeners();
@@ -26,6 +31,12 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _state = ViewState<UserModel>.success(user);
       }
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        _state = ViewState<UserModel>.empty(message: error.message);
+      } else {
+        _state = ViewState<UserModel>.error('Unable to load user profile.');
+      }
     } catch (_) {
       _state = ViewState<UserModel>.error('Unable to load user profile.');
     }
@@ -33,16 +44,24 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> signInMock() async {
+  Future<void> signInSession({
+    String? idToken,
+  }) async {
     _isMutating = true;
     notifyListeners();
 
     try {
-      final user = await _authService.signInMock();
+      final user = await _authService.signInSession(idToken: idToken);
       if (user == null) {
         _state = ViewState<UserModel>.empty(message: 'No authenticated user.');
       } else {
         _state = ViewState<UserModel>.success(user);
+      }
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        _state = ViewState<UserModel>.error(error.message);
+      } else {
+        _state = ViewState<UserModel>.error('Unable to sign in right now.');
       }
     } catch (_) {
       _state = ViewState<UserModel>.error('Unable to sign in right now.');
@@ -52,12 +71,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> signOutMock() async {
+  Future<void> signOut() async {
     _isMutating = true;
     notifyListeners();
 
     try {
-      await _authService.signOutMock();
+      await _authService.signOut();
       _state = ViewState<UserModel>.empty(message: 'Signed out.');
     } catch (_) {
       _state = ViewState<UserModel>.error('Unable to sign out right now.');
@@ -70,6 +89,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> signIn({
     required String email,
     required String password,
+    required String idToken,
   }) async {
     _isMutating = true;
     notifyListeners();
@@ -78,6 +98,7 @@ class AuthProvider extends ChangeNotifier {
       final user = await _authService.signInWithCredentials(
         email: email,
         password: password,
+        idToken: idToken,
       );
 
       if (user == null) {
@@ -87,6 +108,13 @@ class AuthProvider extends ChangeNotifier {
 
       _state = ViewState<UserModel>.success(user);
       return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        _state = ViewState<UserModel>.error(error.message);
+      } else {
+        _state = ViewState<UserModel>.error('Unable to sign in right now.');
+      }
+      return false;
     } catch (_) {
       _state = ViewState<UserModel>.error('Unable to sign in right now.');
       return false;
@@ -101,6 +129,7 @@ class AuthProvider extends ChangeNotifier {
     required String location,
     required String email,
     required String password,
+    required String idToken,
   }) async {
     _isMutating = true;
     notifyListeners();
@@ -111,9 +140,19 @@ class AuthProvider extends ChangeNotifier {
         location: location,
         email: email,
         password: password,
+        idToken: idToken,
       );
       _state = ViewState<UserModel>.success(user);
       return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        _state = ViewState<UserModel>.error(error.message);
+      } else {
+        _state = ViewState<UserModel>.error(
+          'Unable to sign up. Try another email.',
+        );
+      }
+      return false;
     } catch (_) {
       _state = ViewState<UserModel>.error(
         'Unable to sign up. Try another email.',

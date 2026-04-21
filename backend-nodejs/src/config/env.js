@@ -28,10 +28,18 @@ function toBoolean(value, fallback = false) {
 }
 
 function getEnvConfig(env = process.env) {
+	const rawCorsOrigins = env.CORS_ORIGINS || '';
+	const corsOrigins = rawCorsOrigins
+		.split(',')
+		.map((value) => value.trim())
+		.filter((value) => value.length > 0);
+
 	return {
 		nodeEnv: env.NODE_ENV || 'development',
 		authMode: env.AUTH_MODE || 'firebase',
 		port: toNumber(env.PORT, DEFAULT_PORT),
+		corsOrigins,
+		corsAllowCredentials: toBoolean(env.CORS_ALLOW_CREDENTIALS, false),
 		firebaseProjectId: env.FIREBASE_PROJECT_ID || '',
 		firebaseDatabaseURL: env.FIREBASE_DATABASE_URL || '',
 		firebaseStorageBucket: env.FIREBASE_STORAGE_BUCKET || '',

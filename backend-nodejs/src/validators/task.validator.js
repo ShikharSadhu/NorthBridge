@@ -132,6 +132,106 @@ function validateSubmitTaskRatingPayload(payload = {}) {
 	return createValidationResult(errors.length === 0, value, errors);
 }
 
+function parseNumber(value) {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return value;
+	}
+
+	if (typeof value === 'string' && value.trim()) {
+		const parsed = Number(value);
+		if (Number.isFinite(parsed)) {
+			return parsed;
+		}
+	}
+
+	return undefined;
+}
+
+function parsePositiveInt(value) {
+	const parsed = parseNumber(value);
+	if (!Number.isInteger(parsed) || parsed <= 0) {
+		return undefined;
+	}
+
+	return parsed;
+}
+
+function validateTaskListPayload(payload = {}) {
+	const allowedSortBy = new Set(['default', 'distance', 'closestDate', 'latestDate', 'online', 'offline']);
+	const allowedExecutionMode = new Set(['online', 'offline']);
+	const allowedStatus = new Set(['open', 'accepted', 'completed', 'cancelled']);
+
+	const sortByRaw = normalizeString(payload.sortBy);
+	const executionModeRaw = normalizeString(payload.executionMode).toLowerCase();
+	const statusRaw = normalizeString(payload.status).toLowerCase();
+	const minPrice = parseNumber(payload.minPrice);
+	const maxPrice = parseNumber(payload.maxPrice);
+	const page = parsePositiveInt(payload.page);
+	const pageSize = parsePositiveInt(payload.pageSize);
+	const acceptorLat = parseNumber(payload.acceptorLat);
+	const acceptorLng = parseNumber(payload.acceptorLng);
+
+	const value = {
+		sortBy: sortByRaw || undefined,
+		executionMode: executionModeRaw || undefined,
+		status: statusRaw || undefined,
+		minPrice,
+		maxPrice,
+		page,
+		pageSize,
+		acceptorLat,
+		acceptorLng,
+	};
+
+	const errors = [];
+	if (sortByRaw && !allowedSortBy.has(sortByRaw)) {
+		errors.push({field: 'sortBy', message: 'sortBy is invalid.'});
+	}
+	if (executionModeRaw && !allowedExecutionMode.has(executionModeRaw)) {
+		errors.push({field: 'executionMode', message: 'executionMode must be online or offline.'});
+	}
+	if (statusRaw && !allowedStatus.has(statusRaw)) {
+		errors.push({field: 'status', message: 'status is invalid.'});
+	}
+	if (payload.minPrice !== undefined && minPrice === undefined) {
+		errors.push({field: 'minPrice', message: 'minPrice must be numeric.'});
+	}
+	if (payload.maxPrice !== undefined && maxPrice === undefined) {
+		errors.push({field: 'maxPrice', message: 'maxPrice must be numeric.'});
+	}
+	if (typeof minPrice === 'number' && typeof maxPrice === 'number' && minPrice > maxPrice) {
+		errors.push({field: 'priceRange', message: 'minPrice cannot be greater than maxPrice.'});
+	}
+	if (payload.page !== undefined && page === undefined) {
+		errors.push({field: 'page', message: 'page must be a positive integer.'});
+	}
+	if (payload.pageSize !== undefined && pageSize === undefined) {
+		errors.push({field: 'pageSize', message: 'pageSize must be a positive integer.'});
+	}
+	if (payload.acceptorLat !== undefined) {
+		if (
+			typeof acceptorLat !== 'number' ||
+			Number.isNaN(acceptorLat) ||
+			acceptorLat < -90 ||
+			acceptorLat > 90
+		) {
+			errors.push({field: 'acceptorLat', message: 'acceptorLat must be between -90 and 90.'});
+		}
+	}
+	if (payload.acceptorLng !== undefined) {
+		if (
+			typeof acceptorLng !== 'number' ||
+			Number.isNaN(acceptorLng) ||
+			acceptorLng < -180 ||
+			acceptorLng > 180
+		) {
+			errors.push({field: 'acceptorLng', message: 'acceptorLng must be between -180 and 180.'});
+		}
+	}
+
+	return createValidationResult(errors.length === 0, value, errors);
+}
+
 module.exports = {
 	normalizeString,
 	createValidationResult,
@@ -140,4 +240,5 @@ module.exports = {
 	validateRequestTaskCompletionPayload,
 	validateTaskOwnerPayload,
 	validateSubmitTaskRatingPayload,
+	validateTaskListPayload,
 };

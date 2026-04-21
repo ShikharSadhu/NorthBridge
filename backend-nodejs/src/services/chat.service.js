@@ -12,6 +12,7 @@ const {
 	validateSendMessagePayload,
 	validateTaskChatPayload,
 	validateCreateChatPayload,
+	validateChatQueryPayload,
 } = require('../validators/chat.validator');
 const {success, failure} = require('../utils/response.util');
 
@@ -48,16 +49,26 @@ function paginateChats(chats, payload = {}) {
 }
 
 async function fetchChats(payload = {}) {
+	const queryValidation = validateChatQueryPayload(payload);
+	if (!queryValidation.valid) {
+		return failure(400, 'Invalid chat query parameters.');
+	}
+
 	const userId = typeof payload.userId === 'string' ? payload.userId.trim() : '';
 	if (!userId) {
 		return failure(401, 'User is not authenticated.');
 	}
 
 	const chats = await listChatsByUserId(userId);
-	return success(200, paginateChats(sortChats(chats), payload));
+	return success(200, paginateChats(sortChats(chats), queryValidation.value));
 }
 
 async function fetchChatMessages(chatId, payload = {}) {
+	const queryValidation = validateChatQueryPayload(payload);
+	if (!queryValidation.valid) {
+		return failure(400, 'Invalid chat query parameters.');
+	}
+
 	const chat = await getChatById(chatId);
 	if (!chat) {
 		return failure(404, 'Chat not found.');
@@ -74,8 +85,8 @@ async function fetchChatMessages(chatId, payload = {}) {
 	return success(200, {
 		chat,
 		messages: await listMessagesByChatId(chatId, {
-			page: payload.page,
-			pageSize: payload.pageSize,
+			page: queryValidation.value.page,
+			pageSize: queryValidation.value.pageSize,
 		}),
 	});
 }
@@ -92,6 +103,9 @@ async function createMessageEntry(payload = {}) {
 	}
 	if (!chat.users.includes(validation.value.senderId)) {
 		return failure(403, 'Only chat participants can send messages.');
+	}
+	if (chat.taskId !== validation.value.taskId) {
+		return failure(400, 'taskId does not match chat task.');
 	}
 
 	const message = await createMessage(validation.value);

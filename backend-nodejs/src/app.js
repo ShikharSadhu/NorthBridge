@@ -1,4 +1,5 @@
 const {handleApiRequest, listAvailableRoutes} = require('./routes');
+const {envConfig} = require('./config/env');
 const fs = require('fs');
 const path = require('path');
 
@@ -82,10 +83,61 @@ function writeJson(res, status, payload) {
 	res.end(body);
 }
 
+function resolveAllowedOrigin(origin) {
+	if (!origin || typeof origin !== 'string') {
+		return null;
+	}
+
+	const configuredOrigins = envConfig.corsOrigins || [];
+	if (configuredOrigins.length === 0) {
+		return origin;
+	}
+
+	if (configuredOrigins.includes('*')) {
+		return '*';
+	}
+
+	if (configuredOrigins.includes(origin)) {
+		return origin;
+	}
+
+	return null;
+}
+
+function applyCorsHeaders(req, res) {
+	const originHeader = req.headers?.origin;
+	const allowedOrigin = resolveAllowedOrigin(originHeader);
+	if (!allowedOrigin) {
+		return false;
+	}
+
+	res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+	res.setHeader('Vary', 'Origin');
+	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+	res.setHeader(
+		'Access-Control-Allow-Headers',
+		'Content-Type, Authorization, X-Requested-With',
+	);
+
+	if (envConfig.corsAllowCredentials) {
+		res.setHeader('Access-Control-Allow-Credentials', 'true');
+	}
+
+	return true;
+}
+
 function createAppHandler() {
 	return async function appHandler(req, res) {
 		const method = String(req.method || '').toUpperCase();
 		const path = typeof req.url === 'string' ? req.url : '/';
+
+		applyCorsHeaders(req, res);
+
+		if (method === 'OPTIONS') {
+			res.statusCode = 204;
+			res.end();
+			return;
+		}
 
 		if (method === 'GET' && path.split('?')[0] === '/location-map') {
 			if (tryServeStatic('location-map.html', res)) {

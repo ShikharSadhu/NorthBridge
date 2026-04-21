@@ -21,8 +21,20 @@ function validateVoiceTaskPayload(payload = {}) {
 	return createValidationResult(errors.length === 0, {transcript}, errors);
 }
 
+function validateVoiceTextPayload(payload = {}) {
+	const text = normalizeString(payload.text);
+	const errors = [];
+
+	if (!text) {
+		errors.push({field: 'text', message: 'Text is required.'});
+	}
+
+	return createValidationResult(errors.length === 0, {text}, errors);
+}
+
 module.exports = {
 	normalizeString,
 	createValidationResult,
 	validateVoiceTaskPayload,
+	validateVoiceTextPayload,
 };

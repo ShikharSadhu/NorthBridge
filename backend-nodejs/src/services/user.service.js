@@ -13,6 +13,26 @@ const {
 } = require('../validators/auth.validator');
 const {success, failure} = require('../utils/response.util');
 
+function resolveAuthFailureMessage(payload = {}) {
+	if (typeof payload.authErrorMessage === 'string' && payload.authErrorMessage.trim()) {
+		return payload.authErrorMessage.trim();
+	}
+
+	switch (payload.authErrorCode) {
+		case 'token_expired':
+			return 'Authentication token has expired.';
+		case 'token_revoked':
+			return 'Authentication token was revoked.';
+		case 'invalid_token':
+		case 'token_verification_failed':
+			return 'Authentication token is invalid.';
+		case 'firebase_unavailable':
+			return 'Authentication service is unavailable.';
+		default:
+			return 'User is not authenticated.';
+	}
+}
+
 async function listUsers() {
 	return success(200, await listPublicUsers());
 }
@@ -20,7 +40,7 @@ async function listUsers() {
 async function getCurrentUser(payload = {}) {
 	const validation = validateCurrentUserPayload(payload);
 	if (!validation.valid) {
-		return failure(401, 'User is not authenticated.');
+		return failure(401, resolveAuthFailureMessage(payload));
 	}
 
 	const user = await getPrivateUserByIdFromRepository(validation.value.userId);
@@ -44,7 +64,7 @@ async function getPublicUserById(payload = {}) {
 async function login(payload = {}) {
 	const validation = validateFirebaseAuthPayload(payload);
 	if (!validation.valid) {
-		return failure(401, 'User is not authenticated.');
+		return failure(401, resolveAuthFailureMessage(payload));
 	}
 
 	const upserted = await upsertUserFromAuth(validation.value);
@@ -58,7 +78,7 @@ async function login(payload = {}) {
 async function signup(payload = {}) {
 	const validation = validateFirebaseAuthPayload(payload);
 	if (!validation.valid) {
-		return failure(401, 'User is not authenticated.');
+		return failure(401, resolveAuthFailureMessage(payload));
 	}
 
 	const upserted = await upsertUserFromAuth(validation.value);
@@ -72,7 +92,7 @@ async function signup(payload = {}) {
 async function updateUserProfile(payload = {}, authUserId = '') {
 	const userId = typeof authUserId === 'string' ? authUserId.trim() : '';
 	if (!userId) {
-		return failure(401, 'User is not authenticated.');
+		return failure(401, resolveAuthFailureMessage(payload));
 	}
 
 	const validation = validateUpdateProfilePayload(payload);

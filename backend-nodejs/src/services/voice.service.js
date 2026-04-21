@@ -1,6 +1,170 @@
+const {GoogleGenerativeAI} = require('@google/generative-ai');
 const {validateVoiceTaskPayload} = require('../validators/voice.validator');
 const {toVoiceTaskDraft} = require('../models/voice-task-draft.model');
 const {success, failure} = require('../utils/response.util');
+
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const geminiClient = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const geminiModel = geminiClient
+	? geminiClient.getGenerativeModel({model: 'gemini-1.5-flash'})
+	: null;
+
+function cleanJson(text) {
+	if (typeof text !== 'string') {
+		return '';
+	}
+
+	return text.replace(/```json/gi, '').replace(/```/g, '').trim();
+}
+
+function createFallbackUserFields(userText) {
+	const cleaned = typeof userText === 'string' ? userText.trim() : '';
+	const shortTitle = cleaned.slice(0, 40).trim();
+
+	return {
+		title: shortTitle || 'Voice task',
+		description: cleaned || 'Voice task description',
+		location: 'Unknown',
+		price: 0,
+		scheduledAt: null,
+		executionMode: 'offline',
+	};
+}
+
+function validateExtractedFields(fields) {
+	if (typeof fields.title !== 'string') {
+		throw new Error('title must be a string');
+	}
+	if (typeof fields.description !== 'string') {
+		throw new Error('description must be a string');
+	}
+	if (typeof fields.location !== 'string') {
+		throw new Error('location must be a string');
+	}
+	if (typeof fields.price !== 'number' || Number.isNaN(fields.price)) {
+		throw new Error('price must be a number');
+	}
+	if (!(typeof fields.scheduledAt === 'string' || fields.scheduledAt === null)) {
+		throw new Error('scheduledAt must be a string or null');
+	}
+	if (fields.executionMode !== 'offline') {
+		throw new Error('executionMode must be offline');
+	}
+}
+
+function normalizeExtractedFields(raw, userText) {
+	const fallback = createFallbackUserFields(userText);
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+		return fallback;
+	}
+
+	const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : fallback.title;
+	const description =
+		typeof raw.description === 'string' && raw.description.trim()
+			? raw.description.trim()
+			: fallback.description;
+	const location =
+		typeof raw.location === 'string' && raw.location.trim() ? raw.location.trim() : fallback.location;
+	const price = typeof raw.price === 'number' && Number.isFinite(raw.price) ? raw.price : fallback.price;
+	const scheduledAt =
+		typeof raw.scheduledAt === 'string' && raw.scheduledAt.trim() ? raw.scheduledAt.trim() : null;
+
+	return {
+		title,
+		description,
+		location,
+		price,
+		scheduledAt,
+		executionMode: 'offline',
+	};
+}
+
+function parseGeminiJson(rawText) {
+	const cleaned = cleanJson(rawText);
+	try {
+		return JSON.parse(cleaned);
+	} catch (_error) {
+		console.error('Gemini raw response:', rawText);
+		throw new Error('Invalid JSON from Gemini');
+	}
+}
+
+async function extractTaskFields(userText) {
+	const normalizedText = typeof userText === 'string' ? userText.trim() : '';
+	const fallback = createFallbackUserFields(normalizedText);
+
+	if (!normalizedText) {
+		return fallback;
+	}
+
+	if (!geminiModel) {
+		return fallback;
+	}
+
+	const prompt = [
+		'Extract ONLY task fields provided by the user.',
+		'Return ONLY valid JSON with EXACTLY these keys:',
+		'{"title": string, "description": string, "location": string, "price": number, "scheduledAt": string|null, "executionMode": "offline"}',
+		'Do not include id, status, user IDs, or any extra keys.',
+		'Use defaults if missing: location="Unknown", price=0, scheduledAt=null, executionMode="offline".',
+		`User text: ${normalizedText}`,
+	].join('\n');
+
+	const result = await geminiModel.generateContent(prompt);
+	const rawResponseText = result?.response?.text?.() || '';
+	const parsed = parseGeminiJson(rawResponseText);
+
+	const normalized = normalizeExtractedFields(parsed, normalizedText);
+	try {
+		validateExtractedFields(normalized);
+		return normalized;
+	} catch (_error) {
+		const fallbackValidated = createFallbackUserFields(normalizedText);
+		validateExtractedFields(fallbackValidated);
+		return fallbackValidated;
+	}
+}
+
+function generateTaskId() {
+	return `t_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildFullTask(userFields, currentUser) {
+	validateExtractedFields(userFields);
+
+	const uid =
+		currentUser && typeof currentUser.uid === 'string' ? currentUser.uid.trim() : '';
+	if (!uid) {
+		throw new Error('User is not authenticated.');
+	}
+
+	const name =
+		currentUser && typeof currentUser.name === 'string' && currentUser.name.trim()
+			? currentUser.name.trim()
+			: 'Unknown User';
+
+	return {
+		id: generateTaskId(),
+		title: userFields.title,
+		description: userFields.description,
+		location: userFields.location,
+		price: userFields.price,
+		scheduledAt: userFields.scheduledAt,
+		executionMode: userFields.executionMode,
+		postedByUserId: uid,
+		postedByName: name,
+		status: 'open',
+		isActive: true,
+		isRatingPending: false,
+		acceptedAt: null,
+		acceptedByUserId: null,
+		completedAt: null,
+		completedByUserId: null,
+		completionRequestedAt: null,
+		completionRequestedByUserId: null,
+		distanceKm: 0,
+	};
+}
 
 function parseVoiceTaskDraft(transcript) {
 	const cleaned = typeof transcript === 'string' ? transcript.trim() : '';
@@ -33,4 +197,7 @@ function parseVoiceTask(payload = {}) {
 module.exports = {
 	parseVoiceTask,
 	parseVoiceTaskDraft,
+	cleanJson,
+	extractTaskFields,
+	buildFullTask,
 };

@@ -4,7 +4,6 @@ import 'package:frontend/models/voice_instruction_item_model.dart';
 import 'package:frontend/models/voice_capture_result_model.dart';
 import 'package:frontend/providers/voice_provider.dart';
 import 'package:frontend/routes/app_routes.dart';
-import 'package:frontend/services/test_data/voice_input_instructions_test_data.dart';
 import 'package:frontend/widgets/app_button.dart';
 import 'package:frontend/widgets/app_card.dart';
 
@@ -19,9 +18,24 @@ class VoiceInputScreen extends StatelessWidget {
   final VoiceProvider voiceProvider;
 
   List<VoiceInstructionItemModel> get _instructionItems {
-    return voiceInputInstructionsApiResponse
-        .map(VoiceInstructionItemModel.fromJson)
-        .toList(growable: false);
+    return const [
+      VoiceInstructionItemModel(
+        english: 'Task: grocery pickup from Sector 21 market',
+        hindi: 'काम: सेक्टर 21 मार्केट से ग्रोसरी लानी है',
+      ),
+      VoiceInstructionItemModel(
+        english: 'Time: today 7 PM',
+        hindi: 'समय: आज शाम 7 बजे',
+      ),
+      VoiceInstructionItemModel(
+        english: 'Budget: 250 rupees',
+        hindi: 'बजट: 250 रुपये',
+      ),
+      VoiceInstructionItemModel(
+        english: 'Mode: offline',
+        hindi: 'मोड: ऑफलाइन',
+      ),
+    ];
   }
 
   String _statusMessage(VoiceCaptureResultModel? result) {
