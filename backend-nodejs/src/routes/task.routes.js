@@ -77,7 +77,7 @@ const taskRoutes = [
 	{
 		method: 'POST',
 		path: '/v1/tasks',
-		execute: (_params, body) =>
+		execute: (_params, body, userId) =>
 			createTaskController({
 				title: typeof body.title === 'string' ? body.title : undefined,
 				description: typeof body.description === 'string' ? body.description : undefined,
@@ -95,7 +95,7 @@ const taskRoutes = [
 				postedByUserId:
 					typeof body.postedByUserId === 'string' ? body.postedByUserId : undefined,
 				postedByName: typeof body.postedByName === 'string' ? body.postedByName : undefined,
-			}),
+			}, userId),
 	},
 	{
 		method: 'POST',

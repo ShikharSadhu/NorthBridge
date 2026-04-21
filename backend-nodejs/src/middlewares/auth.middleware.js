@@ -7,6 +7,36 @@ let firebaseAuthInitState = {
 	error: null,
 };
 
+function classifyFirebaseTokenError(error) {
+	const code = typeof error?.code === 'string' ? error.code : '';
+
+	if (code.includes('id-token-expired')) {
+		return {
+			authErrorCode: 'token_expired',
+			authErrorMessage: 'Authentication token has expired.',
+		};
+	}
+
+	if (code.includes('id-token-revoked')) {
+		return {
+			authErrorCode: 'token_revoked',
+			authErrorMessage: 'Authentication token was revoked.',
+		};
+	}
+
+	if (code.includes('argument-error') || code.includes('invalid-id-token')) {
+		return {
+			authErrorCode: 'invalid_token',
+			authErrorMessage: 'Authentication token is invalid.',
+		};
+	}
+
+	return {
+		authErrorCode: 'token_verification_failed',
+		authErrorMessage: 'Authentication token verification failed.',
+	};
+}
+
 function normalizeHeaders(headers) {
 	if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {
 		return {};
@@ -104,6 +134,9 @@ async function extractFirebaseAuthContext(headers) {
 			userId: undefined,
 			email: undefined,
 			name: undefined,
+			tokenProvided: false,
+			authErrorCode: undefined,
+			authErrorMessage: undefined,
 		};
 	}
 
@@ -112,6 +145,9 @@ async function extractFirebaseAuthContext(headers) {
 			userId: undefined,
 			email: undefined,
 			name: undefined,
+			tokenProvided: true,
+			authErrorCode: 'firebase_unavailable',
+			authErrorMessage: 'Authentication service is unavailable.',
 		};
 	}
 
@@ -121,12 +157,19 @@ async function extractFirebaseAuthContext(headers) {
 			userId: typeof decoded.uid === 'string' ? decoded.uid : undefined,
 			email: typeof decoded.email === 'string' ? decoded.email : undefined,
 			name: typeof decoded.name === 'string' ? decoded.name : undefined,
+			tokenProvided: true,
+			authErrorCode: undefined,
+			authErrorMessage: undefined,
 		};
-	} catch (_error) {
+	} catch (error) {
+		const classified = classifyFirebaseTokenError(error);
 		return {
 			userId: undefined,
 			email: undefined,
 			name: undefined,
+			tokenProvided: true,
+			authErrorCode: classified.authErrorCode,
+			authErrorMessage: classified.authErrorMessage,
 		};
 	}
 }
@@ -141,6 +184,9 @@ async function getAuthContext(input = {}) {
 		userId,
 		email: auth.email,
 		name: auth.name,
+		tokenProvided: Boolean(auth.tokenProvided),
+		authErrorCode: auth.authErrorCode,
+		authErrorMessage: auth.authErrorMessage,
 		isAuthenticated: Boolean(userId),
 	};
 }
@@ -148,11 +194,12 @@ async function getAuthContext(input = {}) {
 async function requireUser(input = {}) {
 	const authContext = await getAuthContext(input);
 	if (!authContext.userId) {
+		const message = authContext.authErrorMessage || 'User is not authenticated.';
 		return {
 			ok: false,
 			status: 401,
 			body: {
-				message: 'User is not authenticated.',
+				message,
 			},
 		};
 	}

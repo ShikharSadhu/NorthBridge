@@ -114,6 +114,12 @@ async function handleApiRequest(request) {
 	const userId = authContext.userId;
 	const authEmail = typeof authContext.email === 'string' ? authContext.email : undefined;
 	const authName = typeof authContext.name === 'string' ? authContext.name : undefined;
+	const authErrorCode =
+		typeof authContext.authErrorCode === 'string' ? authContext.authErrorCode : undefined;
+	const authErrorMessage =
+		typeof authContext.authErrorMessage === 'string'
+			? authContext.authErrorMessage
+			: undefined;
 
 	const payload = {
 		...query,
@@ -121,6 +127,8 @@ async function handleApiRequest(request) {
 		...(userId ? {userId} : {}),
 		...(authEmail ? {authEmail} : {}),
 		...(authName ? {authName} : {}),
+		...(authErrorCode ? {authErrorCode} : {}),
+		...(authErrorMessage ? {authErrorMessage} : {}),
 	};
 
 	if (method !== 'GET' && method !== 'POST' && method !== 'PATCH') {

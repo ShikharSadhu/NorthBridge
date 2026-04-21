@@ -15,6 +15,7 @@ const {
 	validateRequestTaskCompletionPayload,
 	validateTaskOwnerPayload,
 	validateSubmitTaskRatingPayload,
+	validateTaskListPayload,
 } = require('../validators/task.validator');
 const {success, failure} = require('../utils/response.util');
 const {isValidGeoPoint, calculateRoundedDistanceKm} = require('../utils/geo.utils');
@@ -173,27 +174,37 @@ function applyAcceptorDistanceToList(tasks, payload = {}) {
 }
 
 function fetchTasks(payload = {}) {
+	const validation = validateTaskListPayload(payload);
+	if (!validation.valid) {
+		return Promise.resolve(failure(400, 'Invalid task query parameters.'));
+	}
+
 	return Promise.resolve(listTasks()).then((tasks) => {
-		const withDistance = applyAcceptorDistanceToList(tasks, payload);
-		const filtered = filterTasks(withDistance, payload);
-		const sorted = sortTasks(filtered, payload.sortBy);
-		return success(200, paginateTasks(sorted, payload));
+		const withDistance = applyAcceptorDistanceToList(tasks, validation.value);
+		const filtered = filterTasks(withDistance, validation.value);
+		const sorted = sortTasks(filtered, validation.value.sortBy);
+		return success(200, paginateTasks(sorted, validation.value));
 	});
 }
 
 async function fetchMyTaskHistory(payload = {}) {
+	const validation = validateTaskListPayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'Invalid task query parameters.');
+	}
+
 	const userId = typeof payload.userId === 'string' ? payload.userId.trim() : '';
 	if (!userId) {
 		return failure(401, 'User is not authenticated.');
 	}
 
 	const tasks = await listTasks();
-	const withDistance = applyAcceptorDistanceToList(tasks, payload);
+	const withDistance = applyAcceptorDistanceToList(tasks, validation.value);
 	const history = withDistance.filter(
 		(task) => task.acceptedByUserId === userId || task.postedByUserId === userId,
 	);
-	const sorted = sortTasks(history, payload.sortBy || 'latestDate');
-	return success(200, paginateTasks(sorted, payload));
+	const sorted = sortTasks(history, validation.value.sortBy || 'latestDate');
+	return success(200, paginateTasks(sorted, validation.value));
 }
 
 async function fetchTaskById(taskId, payload = {}) {
@@ -219,6 +230,9 @@ async function acceptTaskEntry(taskId, payload = {}) {
 	const task = await getTaskById(taskId);
 	if (!task) {
 		return failure(404, 'Task not found.');
+	}
+	if (!task.isActive || task.status === 'cancelled' || task.status === 'completed') {
+		return failure(409, 'Task is closed and cannot be accepted.');
 	}
 
 	const validation = validateAcceptTaskPayload(payload);
@@ -251,6 +265,9 @@ async function requestTaskCompletionEntry(taskId, payload = {}) {
 	}
 	if (task.acceptedByUserId !== validation.value.helperUserId) {
 		return failure(403, 'Only the accepted helper can request completion.');
+	}
+	if (task.completionRequestedByUserId) {
+		return failure(409, 'Completion is already requested for this task.');
 	}
 
 	const updatedTask = await requestTaskCompletion(taskId, validation.value.helperUserId);

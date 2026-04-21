@@ -18,6 +18,21 @@ Optional values:
 - `FIREBASE_APP_ID`
 - `FIREBASE_EMULATOR=true`
 
+## Frontend connection environment
+
+Configure frontend base URL through Flutter dart-define:
+
+- `NB_API_BASE_URL=http://10.0.2.2:3000` for Android emulator
+- `NB_API_BASE_URL=http://127.0.0.1:3000` for iOS simulator
+- `NB_API_BASE_URL=http://<your-lan-ip>:3000` for physical device
+
+Backend CORS configuration is controlled by environment variables:
+
+- `CORS_ORIGINS` as comma-separated origins
+- `CORS_ALLOW_CREDENTIALS=true|false`
+
+If `CORS_ORIGINS` is omitted, any incoming origin is echoed in development-oriented mode.
+
 ## Health check
 
 Request `GET /v1/health` to confirm the backend is up. The response now includes a `firestore` block that shows whether Firestore is configured and reachable.

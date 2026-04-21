@@ -2,6 +2,30 @@ const taskService = require('../services/task.service');
 const chatService = require('../services/chat.service');
 const voiceService = require('../services/voice.service');
 
+function resolveActorId(payloadActorId, authUserId) {
+	const authId = typeof authUserId === 'string' ? authUserId.trim() : '';
+	const payloadId = typeof payloadActorId === 'string' ? payloadActorId.trim() : '';
+
+	if (!authId) {
+		return {
+			id: payloadId || undefined,
+		};
+	}
+
+	if (!payloadId || payloadId === authId) {
+		return {
+			id: authId,
+		};
+	}
+
+	return {
+		error: {
+			status: 403,
+			message: 'Authenticated user does not match requested actor.',
+		},
+	};
+}
+
 function toEntityBody(result, entityKey) {
 	if (!result.ok) {
 		return {
@@ -27,6 +51,16 @@ async function listTasksController() {
 
 async function listTasksWithFilterController(payload = {}) {
 	const result = await taskService.fetchTasks(payload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				tasks: [],
+				message: result.message,
+			},
+		};
+	}
+
 	return {
 		status: result.status,
 		body: {
@@ -249,6 +283,16 @@ async function cancelTaskController(taskId, payload = {}, authUserId = '') {
 
 async function listChatsController(payload = {}) {
 	const result = await chatService.fetchChats(payload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				chats: null,
+				message: result.message,
+			},
+		};
+	}
+
 	return {
 		status: result.status,
 		body: {
@@ -277,9 +321,19 @@ async function getChatMessagesController(chatId, payload = {}) {
 }
 
 async function sendMessageController(chatId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.senderId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		senderId: payload.senderId || authUserId,
+		senderId: actor.id,
 	};
 	const result = await chatService.createMessageEntry({
 		...mergedPayload,
@@ -306,14 +360,28 @@ async function openOrCreateTaskChatController(payload = {}, authUserId = '') {
 	const hasCreateChatContract =
 		typeof payload.taskId === 'string' && typeof payload.participantUserId === 'string';
 
+	const actor = hasCreateChatContract
+		? resolveActorId(payload.participantUserId, authUserId)
+		: resolveActorId(payload.helperUserId, authUserId);
+
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				chat: null,
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const result = hasCreateChatContract
 		? await chatService.openOrCreateChatEntry({
 				taskId: payload.taskId,
-				participantUserId: payload.participantUserId,
+				participantUserId: actor.id,
 		  })
 		: await chatService.openOrCreateTaskChatEntry({
 				...payload,
-				helperUserId: payload.helperUserId || authUserId,
+				helperUserId: actor.id,
 		  });
 	if (!result.ok) {
 		return {

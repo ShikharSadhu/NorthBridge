@@ -104,6 +104,39 @@ function validateCreateChatPayload(payload = {}) {
 	return createValidationResult(errors.length === 0, value, errors);
 }
 
+function parsePositiveInt(value) {
+	let numeric = value;
+	if (typeof value === 'string' && value.trim()) {
+		numeric = Number(value);
+	}
+
+	if (!Number.isInteger(numeric) || numeric <= 0) {
+		return undefined;
+	}
+
+	return numeric;
+}
+
+function validateChatQueryPayload(payload = {}) {
+	const page = parsePositiveInt(payload.page);
+	const pageSize = parsePositiveInt(payload.pageSize);
+
+	const value = {
+		page,
+		pageSize,
+	};
+
+	const errors = [];
+	if (payload.page !== undefined && page === undefined) {
+		errors.push({field: 'page', message: 'page must be a positive integer.'});
+	}
+	if (payload.pageSize !== undefined && pageSize === undefined) {
+		errors.push({field: 'pageSize', message: 'pageSize must be a positive integer.'});
+	}
+
+	return createValidationResult(errors.length === 0, value, errors);
+}
+
 module.exports = {
 	normalizeString,
 	createValidationResult,
@@ -111,4 +144,5 @@ module.exports = {
 	validateSendMessagePayload,
 	validateTaskChatPayload,
 	validateCreateChatPayload,
+	validateChatQueryPayload,
 };

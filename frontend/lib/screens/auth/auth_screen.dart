@@ -27,6 +27,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _idTokenController = TextEditingController();
 
   @override
   void dispose() {
@@ -34,6 +35,7 @@ class _AuthScreenState extends State<AuthScreen> {
     _locationController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _idTokenController.dispose();
     super.dispose();
   }
 
@@ -41,6 +43,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final authProvider = widget.authProvider;
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final idToken = _idTokenController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,9 +52,20 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
+    if (idToken.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Firebase ID token is required.')),
+      );
+      return;
+    }
+
     bool success;
     if (_isLogin) {
-      success = await authProvider.signIn(email: email, password: password);
+      success = await authProvider.signIn(
+        email: email,
+        password: password,
+        idToken: idToken,
+      );
     } else {
       final name = _nameController.text.trim();
       final location = _locationController.text.trim();
@@ -68,6 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
         location: location,
         email: email,
         password: password,
+        idToken: idToken,
       );
     }
 
@@ -198,6 +213,11 @@ class _AuthScreenState extends State<AuthScreen> {
                           AppTextField(
                             label: 'Password',
                             controller: _passwordController,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          AppTextField(
+                            label: 'Firebase ID token',
+                            controller: _idTokenController,
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           AppButton(

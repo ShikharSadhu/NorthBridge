@@ -159,7 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _signOut() async {
-    await widget.authProvider.signOutMock();
+    await widget.authProvider.signOut();
 
     if (!mounted) {
       return;

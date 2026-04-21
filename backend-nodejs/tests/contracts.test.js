@@ -4,6 +4,7 @@
  */
 
 const {handleApiRequest} = require('../src/routes');
+const {listMessagesByChatId} = require('../src/repositories/message.repository');
 
 describe('Data contract snapshots', () => {
 	describe('User contract', () => {
@@ -103,43 +104,129 @@ describe('Data contract snapshots', () => {
 	});
 
 	describe('Chat contract', () => {
-		test('Chat list requires authenticated user context', async () => {
-			const result = await handleApiRequest({
-				method: 'GET',
-				path: '/v1/chats',
-				body: {},
-				headers: {authorization: 'Bearer mock-token-u_1001'},
+		test('Chat object should follow expected schema with nullable lastMessage', async () => {
+			const taskCreate = await handleApiRequest({
+				method: 'POST',
+				path: '/v1/tasks',
+				body: {
+					title: 'Contract chat task',
+					description: 'Used for chat contract schema coverage.',
+					location: 'Delhi',
+					price: 45,
+					scheduledAt: new Date().toISOString(),
+					executionMode: 'offline',
+					postedByUserId: 'u_1001',
+					postedByName: 'Aarav Sharma',
+				},
 			});
+			expect(taskCreate.status).toBe(201);
 
-			expect(result.status).toBe(401);
-			expect(result.body).toHaveProperty('chats', null);
+			const chatCreate = await handleApiRequest({
+				method: 'POST',
+				path: '/v1/chats',
+				body: {
+					taskId: taskCreate.body.task.id,
+					participantUserId: 'u_1002',
+				},
+			});
+			expect([200, 201]).toContain(chatCreate.status);
+
+			expect(chatCreate.body).toHaveProperty('chat');
+			const chat = chatCreate.body.chat;
+			expect(chat).toHaveProperty('chatId');
+			expect(chat).toHaveProperty('taskId');
+			expect(chat).toHaveProperty('taskTitle');
+			expect(chat).toHaveProperty('taskOwnerUserId');
+			expect(chat).toHaveProperty('taskOwnerName');
+			expect(chat).toHaveProperty('users');
+			expect(Array.isArray(chat.users)).toBe(true);
+			expect(chat.users.length).toBeGreaterThan(0);
+			expect(chat.users.every((entry) => typeof entry === 'string')).toBe(true);
+
+			if (chat.lastMessage == null) {
+				expect(chat.lastMessage).toBeNull();
+			} else {
+				expect(chat.lastMessage).toHaveProperty('id');
+				expect(chat.lastMessage).toHaveProperty('chatId');
+				expect(chat.lastMessage).toHaveProperty('taskId');
+				expect(chat.lastMessage).toHaveProperty('senderId');
+				expect(chat.lastMessage).toHaveProperty('text');
+				expect(chat.lastMessage).toHaveProperty('timestamp');
+				expect(typeof chat.lastMessage.timestamp).toBe('string');
+			}
 		});
 	});
 
 	describe('Message contract', () => {
-		test('Message endpoint requires authenticated user context', async () => {
-			const result = await handleApiRequest({
-				method: 'GET',
-				path: '/v1/chats/c_9001/messages',
-				body: {},
-				headers: {authorization: 'Bearer mock-token-u_1001'},
+		test('Message list should have expected schema and timestamps in ascending order', async () => {
+			const taskCreate = await handleApiRequest({
+				method: 'POST',
+				path: '/v1/tasks',
+				body: {
+					title: 'Contract message task',
+					description: 'Used for message contract ordering coverage.',
+					location: 'Noida',
+					price: 35,
+					scheduledAt: new Date().toISOString(),
+					executionMode: 'offline',
+					postedByUserId: 'u_1001',
+					postedByName: 'Aarav Sharma',
+				},
 			});
+			expect(taskCreate.status).toBe(201);
 
-			expect([401, 404]).toContain(result.status);
-		});
-
-		test('Message timestamp should be ISO-8601', async () => {
-			const result = await handleApiRequest({
-				method: 'GET',
-				path: '/v1/chats/c_9001/messages',
-				body: {},
-				headers: {authorization: 'Bearer mock-token-u_1001'},
+			const chatCreate = await handleApiRequest({
+				method: 'POST',
+				path: '/v1/chats',
+				body: {
+					taskId: taskCreate.body.task.id,
+					participantUserId: 'u_1002',
+				},
 			});
+			expect([200, 201]).toContain(chatCreate.status);
 
-			if (result.status === 200 && result.body.messages && result.body.messages.length > 0) {
-				const message = result.body.messages[0];
+			const chatId = chatCreate.body.chat.chatId;
+			const firstSend = await handleApiRequest({
+				method: 'POST',
+				path: `/v1/chats/${chatId}/messages`,
+				body: {
+					taskId: taskCreate.body.task.id,
+					senderId: 'u_1002',
+					text: 'First message',
+				},
+			});
+			expect(firstSend.status).toBe(201);
+
+			const secondSend = await handleApiRequest({
+				method: 'POST',
+				path: `/v1/chats/${chatId}/messages`,
+				body: {
+					taskId: taskCreate.body.task.id,
+					senderId: 'u_1001',
+					text: 'Second message',
+				},
+			});
+			expect(secondSend.status).toBe(201);
+
+			const messages = await listMessagesByChatId(chatId);
+			expect(Array.isArray(messages)).toBe(true);
+			expect(messages.length).toBeGreaterThan(0);
+			for (const message of messages) {
+				expect(message).toHaveProperty('id');
+				expect(message).toHaveProperty('chatId');
+				expect(message).toHaveProperty('taskId');
+				expect(message).toHaveProperty('senderId');
+				expect(message).toHaveProperty('text');
+				expect(message).toHaveProperty('timestamp');
+				expect(typeof message.timestamp).toBe('string');
 				const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 				expect(isoRegex.test(message.timestamp)).toBe(true);
+			}
+
+			for (let index = 1; index < messages.length; index += 1) {
+				const prevTs = Date.parse(messages[index - 1].timestamp);
+				const nextTs = Date.parse(messages[index].timestamp);
+				expect(prevTs).toBeLessThanOrEqual(nextTs);
 			}
 		});
 	});
