@@ -1,3 +1,4 @@
+const { websocketUtils } = require('../server');
 const taskService = require('../services/task.service');
 const chatService = require('../services/chat.service');
 const voiceService = require('../services/voice.service');
@@ -112,12 +113,18 @@ async function createTaskController(payload = {}) {
 		};
 	}
 
-	return {
-		status: result.status,
-		body: {
-			task: result.data,
-		},
-	};
+	// Notify all users
+websocketUtils.broadcast({
+	type: "TASK_CREATED",
+	data: result.data
+});
+
+return {
+	status: result.status,
+	body: {
+		task: result.data,
+	},
+};
 }
 
 async function acceptTaskController(taskId, payload = {}, authUserId = '') {
@@ -125,7 +132,9 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 		...payload,
 		acceptedByUserId: payload.acceptedByUserId || authUserId,
 	};
+
 	const result = await taskService.acceptTaskEntry(taskId, mergedPayload);
+
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -135,6 +144,15 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 		};
 	}
 
+	// ✅ MUST BE BEFORE return
+	websocketUtils.sendToUser(result.data.postedByUserId, {
+		type: "TASK_ACCEPTED",
+		data: {
+			taskId: result.data.id,
+			acceptedBy: result.data.acceptedByUserId
+		}
+	});
+
 	return {
 		status: result.status,
 		body: {
@@ -142,7 +160,6 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 		},
 	};
 }
-
 async function requestTaskCompletionController(taskId, payload = {}, authUserId = '') {
 	const mergedPayload = {
 		...payload,
@@ -240,7 +257,9 @@ async function completeTaskController(taskId, payload = {}, authUserId = '') {
 		...payload,
 		ownerUserId: payload.ownerUserId || authUserId,
 	};
+
 	const result = await taskService.completeTaskEntry(taskId, mergedPayload);
+
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -250,6 +269,12 @@ async function completeTaskController(taskId, payload = {}, authUserId = '') {
 		};
 	}
 
+	// ✅ BEFORE return
+	websocketUtils.sendToUser(result.data.postedByUserId, {
+		type: "TASK_COMPLETED",
+		data: result.data
+	});
+
 	return {
 		status: result.status,
 		body: {
@@ -257,7 +282,6 @@ async function completeTaskController(taskId, payload = {}, authUserId = '') {
 		},
 	};
 }
-
 async function cancelTaskController(taskId, payload = {}, authUserId = '') {
 	const mergedPayload = {
 		...payload,
@@ -335,10 +359,12 @@ async function sendMessageController(chatId, payload = {}, authUserId = '') {
 		...payload,
 		senderId: actor.id,
 	};
+
 	const result = await chatService.createMessageEntry({
 		...mergedPayload,
 		chatId,
 	});
+
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -348,6 +374,12 @@ async function sendMessageController(chatId, payload = {}, authUserId = '') {
 		};
 	}
 
+	// ✅ BEFORE return
+	websocketUtils.broadcast({
+		type: "NEW_MESSAGE",
+		data: result.data
+	});
+
 	return {
 		status: result.status,
 		body: {
@@ -355,7 +387,6 @@ async function sendMessageController(chatId, payload = {}, authUserId = '') {
 		},
 	};
 }
-
 async function openOrCreateTaskChatController(payload = {}, authUserId = '') {
 	const hasCreateChatContract =
 		typeof payload.taskId === 'string' && typeof payload.participantUserId === 'string';
@@ -403,6 +434,7 @@ async function openOrCreateTaskChatController(payload = {}, authUserId = '') {
 
 async function parseVoiceTaskController(payload = {}) {
 	const result = await voiceService.parseVoiceTask(payload);
+
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -413,6 +445,14 @@ async function parseVoiceTaskController(payload = {}) {
 		};
 	}
 
+	// ✅ BEFORE return
+	if (payload.userId) {
+		websocketUtils.sendToUser(payload.userId, {
+			type: "VOICE_PARSED",
+			data: result.data
+		});
+	}
+
 	return {
 		status: result.status,
 		body: {
@@ -420,7 +460,6 @@ async function parseVoiceTaskController(payload = {}) {
 		},
 	};
 }
-
 module.exports = {
 	listTasksController,
 	listTasksWithFilterController,
