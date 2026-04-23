@@ -5,6 +5,7 @@ const {chatRoutes} = require('./chat.routes');
 const {voiceRoutes} = require('./voice.routes');
 const {healthRoutes} = require('./health.routes');
 const {reportRoutes} = require('./report.routes');
+const {paymentRoutes} = require('./payment.routes');
 const {normalizeHeaders, getAuthContext} = require('../middlewares/auth.middleware');
 
 const routes = [
@@ -15,6 +16,7 @@ const routes = [
 	...chatRoutes,
 	...voiceRoutes,
 	...reportRoutes,
+	...paymentRoutes,
 ];
 
 function normalizeBody(body) {
@@ -107,6 +109,7 @@ function hasPathForAnyMethod(path) {
 async function handleApiRequest(request) {
 	const method = String(request.method || '').toUpperCase();
 	const path = typeof request.path === 'string' ? request.path : '/';
+	const requestId = typeof request.requestId === 'string' ? request.requestId : undefined;
 	const query = parseQuery(path);
 	const normalizedBody = normalizeBody(request.body);
 	const normalizedHeaders = normalizeHeaders(request.headers);
@@ -124,6 +127,7 @@ async function handleApiRequest(request) {
 	const payload = {
 		...query,
 		...normalizedBody,
+		...(requestId ? {requestId} : {}),
 		...(userId ? {userId} : {}),
 		...(authEmail ? {authEmail} : {}),
 		...(authName ? {authName} : {}),

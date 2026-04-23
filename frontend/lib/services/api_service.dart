@@ -32,6 +32,28 @@ class ApiException implements Exception {
 	}
 }
 
+class ApiTelemetryEvent {
+	ApiTelemetryEvent({
+		required this.method,
+		required this.path,
+		required this.durationMs,
+		required this.success,
+		this.statusCode,
+		this.requestId,
+		this.errorMessage,
+	});
+
+	final ApiHttpMethod method;
+	final String path;
+	final int durationMs;
+	final bool success;
+	final int? statusCode;
+	final String? requestId;
+	final String? errorMessage;
+}
+
+typedef ApiTelemetryHandler = void Function(ApiTelemetryEvent event);
+
 class ApiService {
 	ApiService({
 		String? baseUrl,
@@ -58,11 +80,16 @@ class ApiService {
 	final Map<String, String> _defaultHeaders;
 
 	static String? _globalBearerToken;
+	static ApiTelemetryHandler? _telemetryHandler;
 
 	static void setGlobalBearerToken(String? token) {
 		final normalized = token?.trim();
 		_globalBearerToken =
 				(normalized == null || normalized.isEmpty) ? null : normalized;
+	}
+
+	static void setTelemetryHandler(ApiTelemetryHandler? handler) {
+		_telemetryHandler = handler;
 	}
 
 	Future<Map<String, dynamic>> getJson(
@@ -122,6 +149,7 @@ class ApiService {
 		Map<String, String>? headers,
 		String? bearerToken,
 	}) async {
+		final startedAt = DateTime.now();
 		final uri = _buildUri(path, queryParameters);
 		final resolvedHeaders = {
 			..._defaultHeaders,
@@ -138,6 +166,7 @@ class ApiService {
 		final encodedBody = body == null ? null : jsonEncode(body);
 
 		http.Response response;
+		ApiException? capturedException;
 		try {
 			response = await _dispatch(
 				method: method,
@@ -146,23 +175,39 @@ class ApiService {
 				encodedBody: encodedBody,
 			).timeout(_timeout);
 		} on http.ClientException catch (error) {
-			throw ApiException(
+			capturedException = ApiException(
 				message: 'Unable to connect to API server.',
 				uri: uri,
 				details: error,
 			);
+			throw capturedException;
 		} on TimeoutException catch (error) {
-			throw ApiException(
+			capturedException = ApiException(
 				message: 'API request timed out.',
 				uri: uri,
 				details: error,
 			);
+			throw capturedException;
 		} catch (error) {
-			throw ApiException(
+			capturedException = ApiException(
 				message: 'Unexpected API request error.',
 				uri: uri,
 				details: error,
 			);
+			throw capturedException;
+		} finally {
+			if (capturedException != null) {
+				_emitTelemetry(
+					ApiTelemetryEvent(
+						method: method,
+						path: path,
+						durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+						success: false,
+						statusCode: capturedException.statusCode,
+						errorMessage: capturedException.message,
+					),
+				);
+			}
 		}
 
 		final dynamic decoded = _decodeResponseBody(response.body);
@@ -172,15 +217,47 @@ class ApiService {
 
 		if (response.statusCode < 200 || response.statusCode >= 300) {
 			final message = _extractErrorMessage(responseMap);
-			throw ApiException(
+			final apiError = ApiException(
 				message: message,
 				statusCode: response.statusCode,
 				uri: uri,
 				details: responseMap,
 			);
+			_emitTelemetry(
+				ApiTelemetryEvent(
+					method: method,
+					path: path,
+					durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+					success: false,
+					statusCode: response.statusCode,
+					requestId: response.headers['x-request-id'],
+					errorMessage: message,
+				),
+			);
+			throw apiError;
 		}
 
+		_emitTelemetry(
+			ApiTelemetryEvent(
+				method: method,
+				path: path,
+				durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+				success: true,
+				statusCode: response.statusCode,
+				requestId: response.headers['x-request-id'],
+			),
+		);
+
 		return responseMap;
+	}
+
+	void _emitTelemetry(ApiTelemetryEvent event) {
+		final handler = _telemetryHandler;
+		if (handler == null) {
+			return;
+		}
+
+		handler(event);
 	}
 
 	Future<http.Response> _dispatch({

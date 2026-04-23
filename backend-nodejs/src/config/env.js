@@ -27,6 +27,15 @@ function toBoolean(value, fallback = false) {
 	return fallback;
 }
 
+function normalizeVoiceAiMode(value) {
+	const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+	if (normalized === 'local-only' || normalized === 'local-first' || normalized === 'gemini-first') {
+		return normalized;
+	}
+
+	return 'local-only';
+}
+
 function getEnvConfig(env = process.env) {
 	const rawCorsOrigins = env.CORS_ORIGINS || '';
 	const corsOrigins = rawCorsOrigins
@@ -46,6 +55,7 @@ function getEnvConfig(env = process.env) {
 		firebaseAppId: env.FIREBASE_APP_ID || '',
 		firebaseCredentialsJson: env.FIREBASE_CREDENTIALS_JSON || '',
 		googleApplicationCredentials: env.GOOGLE_APPLICATION_CREDENTIALS || '',
+		voiceAiMode: normalizeVoiceAiMode(env.VOICE_AI_MODE),
 		enableFirebaseEmulator: toBoolean(env.FIREBASE_EMULATOR, false),
 		firestoreEmulatorHost: env.FIRESTORE_EMULATOR_HOST || '',
 	};
@@ -56,6 +66,7 @@ const envConfig = getEnvConfig();
 module.exports = {
 	DEFAULT_PORT,
 	toBoolean,
+	normalizeVoiceAiMode,
 	toNumber,
 	getEnvConfig,
 	envConfig,
