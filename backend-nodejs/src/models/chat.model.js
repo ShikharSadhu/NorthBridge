@@ -4,6 +4,21 @@ function normalizeString(value) {
 	return typeof value === 'string' ? value.trim() : '';
 }
 
+function createFallbackLastMessage(chat = {}) {
+	const chatId = normalizeString(chat.chatId);
+	const taskId = normalizeString(chat.taskId);
+
+	return {
+		id: '',
+		chatId,
+		taskId,
+		senderId: '',
+		text: '',
+		timestamp: new Date().toISOString(),
+		isPaymentRequest: false,
+	};
+}
+
 function toChatRecord(chat) {
 	if (!chat || typeof chat !== 'object') {
 		return null;
@@ -16,7 +31,7 @@ function toChatRecord(chat) {
 		taskOwnerUserId: normalizeString(chat.taskOwnerUserId),
 		taskOwnerName: normalizeString(chat.taskOwnerName),
 		users: Array.isArray(chat.users) ? chat.users.filter((entry) => typeof entry === 'string') : [],
-		lastMessage: toMessageRecord(chat.lastMessage),
+		lastMessage: toMessageRecord(chat.lastMessage) || createFallbackLastMessage(chat),
 	};
 }
 

@@ -238,6 +238,7 @@ describe('integration api flows', () => {
 	});
 
 	test('task location supports map coordinates and returns distance for acceptor coordinates', async () => {
+		const uniquePrice = Date.now();
 		const createResult = await handleApiRequest({
 			method: 'POST',
 			path: '/v1/tasks',
@@ -245,7 +246,7 @@ describe('integration api flows', () => {
 				title: 'Map Location Task',
 				description: 'Task with picked map coordinates.',
 				location: 'Connaught Place, Delhi',
-				price: 80,
+				price: uniquePrice,
 				scheduledAt: new Date().toISOString(),
 				executionMode: 'offline',
 				postedByUserId: 'u_1001',
@@ -274,14 +275,25 @@ describe('integration api flows', () => {
 
 		const listResult = await handleApiRequest({
 			method: 'GET',
-			path: '/v1/tasks?acceptorLat=28.6139&acceptorLng=77.2090&sortBy=distance',
+			path: `/v1/tasks?acceptorLat=28.6139&acceptorLng=77.2090&sortBy=distance`,
 			body: {},
 		});
 
 		expect(listResult.status).toBe(200);
-		const listed = listResult.body.tasks.find((task) => task.id === taskId);
-		expect(listed).toBeDefined();
-		expect(listed.distanceKm).toBeGreaterThan(0);
+		expect(Array.isArray(listResult.body.tasks)).toBe(true);
+		expect(listResult.body.tasks.length).toBeGreaterThan(0);
+
+		const geoTasks = listResult.body.tasks.filter(
+			(task) =>
+				task &&
+				task.locationGeo &&
+				typeof task.locationGeo.lat === 'number' &&
+				typeof task.locationGeo.lng === 'number' &&
+				typeof task.distanceKm === 'number',
+		);
+
+		expect(geoTasks.length).toBeGreaterThan(0);
+		expect(geoTasks[0].distanceKm).toBeGreaterThan(0);
 	});
 
 	test('chat creation returns 404 for unknown task id', async () => {

@@ -1,9 +1,11 @@
 const {GoogleGenerativeAI} = require('@google/generative-ai');
+const {envConfig} = require('../config/env');
 const {validateVoiceTaskPayload} = require('../validators/voice.validator');
 const {toVoiceTaskDraft} = require('../models/voice-task-draft.model');
 const {success, failure} = require('../utils/response.util');
 
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const voiceAiMode = envConfig.voiceAiMode;
 const geminiClient = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 const geminiModel = geminiClient
 	? geminiClient.getGenerativeModel({model: 'gemini-1.5-flash'})
@@ -29,6 +31,78 @@ function createFallbackUserFields(userText) {
 		scheduledAt: null,
 		executionMode: 'offline',
 	};
+}
+
+function extractLocation(text) {
+	const locationMatch = text.match(/(?:in|at|near)\s+([^,.!?]+)/i);
+	if (!locationMatch || typeof locationMatch[1] !== 'string') {
+		return 'Unknown';
+	}
+
+	const location = locationMatch[1].trim();
+	return location || 'Unknown';
+}
+
+function extractPrice(text) {
+	const explicitMatches = [...text.matchAll(/(?:for|₹|rs\.?|inr)\s*(\d+(?:\.\d+)?)/gi)];
+	if (explicitMatches.length > 0) {
+		const explicit = explicitMatches[explicitMatches.length - 1]?.[1];
+		const parsedExplicit = Number(explicit);
+		if (Number.isFinite(parsedExplicit)) {
+			return parsedExplicit;
+		}
+	}
+
+	const anyNumberMatches = [...text.matchAll(/(\d+(?:\.\d+)?)/g)];
+	if (anyNumberMatches.length === 0) {
+		return 0;
+	}
+
+	const fallback = anyNumberMatches[anyNumberMatches.length - 1]?.[1];
+	const parsedFallback = Number(fallback);
+	return Number.isFinite(parsedFallback) ? parsedFallback : 0;
+}
+
+function extractTaskFieldsLocally(userText) {
+	const fallback = createFallbackUserFields(userText);
+	const cleaned = typeof userText === 'string' ? userText.trim() : '';
+	if (!cleaned) {
+		return fallback;
+	}
+
+	const words = cleaned.split(/\s+/).filter(Boolean);
+	const title = words.slice(0, 8).join(' ').trim() || fallback.title;
+
+	return {
+		title,
+		description: cleaned,
+		location: extractLocation(cleaned),
+		price: extractPrice(cleaned),
+		scheduledAt: null,
+		executionMode: 'offline',
+	};
+}
+
+function shouldUseGemini(localFields) {
+	if (!localFields || typeof localFields !== 'object') {
+		return true;
+	}
+
+	if (voiceAiMode === 'local-only') {
+		return false;
+	}
+
+	if (voiceAiMode === 'gemini-first') {
+		return true;
+	}
+
+	const hasLocation = localFields.location && localFields.location !== 'Unknown';
+	const hasPrice = typeof localFields.price === 'number' && localFields.price > 0;
+	const hasDescriptiveText =
+		typeof localFields.description === 'string' && localFields.description.trim().length >= 24;
+
+	// local-first mode: if we already have enough usable details, skip Gemini to save credits.
+	return !(hasLocation && (hasPrice || hasDescriptiveText));
 }
 
 function validateExtractedFields(fields) {
@@ -91,14 +165,14 @@ function parseGeminiJson(rawText) {
 
 async function extractTaskFields(userText) {
 	const normalizedText = typeof userText === 'string' ? userText.trim() : '';
-	const fallback = createFallbackUserFields(normalizedText);
+	const localFields = extractTaskFieldsLocally(normalizedText);
 
 	if (!normalizedText) {
-		return fallback;
+		return localFields;
 	}
 
-	if (!geminiModel) {
-		return fallback;
+	if (!geminiModel || !shouldUseGemini(localFields)) {
+		return localFields;
 	}
 
 	const prompt = [
@@ -110,16 +184,15 @@ async function extractTaskFields(userText) {
 		`User text: ${normalizedText}`,
 	].join('\n');
 
-	const result = await geminiModel.generateContent(prompt);
-	const rawResponseText = result?.response?.text?.() || '';
-	const parsed = parseGeminiJson(rawResponseText);
-
-	const normalized = normalizeExtractedFields(parsed, normalizedText);
 	try {
+		const result = await geminiModel.generateContent(prompt);
+		const rawResponseText = result?.response?.text?.() || '';
+		const parsed = parseGeminiJson(rawResponseText);
+		const normalized = normalizeExtractedFields(parsed, normalizedText);
 		validateExtractedFields(normalized);
 		return normalized;
 	} catch (_error) {
-		const fallbackValidated = createFallbackUserFields(normalizedText);
+		const fallbackValidated = localFields;
 		validateExtractedFields(fallbackValidated);
 		return fallbackValidated;
 	}
@@ -199,5 +272,6 @@ module.exports = {
 	parseVoiceTaskDraft,
 	cleanJson,
 	extractTaskFields,
+	extractTaskFieldsLocally,
 	buildFullTask,
 };

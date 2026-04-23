@@ -145,6 +145,27 @@ describe('Route methods and paths', () => {
 		});
 	});
 
+	describe('Payment routes', () => {
+		test('POST /v1/chats/:chatId/payment-requests should exist', () => {
+			const route = routes.find(
+				(r) => r.method === 'POST' && r.path === '/v1/chats/:chatId/payment-requests',
+			);
+			expect(route).toBeDefined();
+		});
+
+		test('GET /v1/payment-requests should exist', () => {
+			const route = routes.find((r) => r.method === 'GET' && r.path === '/v1/payment-requests');
+			expect(route).toBeDefined();
+		});
+
+		test('PATCH /v1/payment-requests/:requestId should exist', () => {
+			const route = routes.find(
+				(r) => r.method === 'PATCH' && r.path === '/v1/payment-requests/:requestId',
+			);
+			expect(route).toBeDefined();
+		});
+	});
+
 	describe('Health routes', () => {
 		test('GET /v1/health should exist', () => {
 			const route = routes.find((r) => r.method === 'GET' && r.path === '/v1/health');

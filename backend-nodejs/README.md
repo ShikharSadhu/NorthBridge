@@ -17,6 +17,9 @@ Optional values:
 - `FIREBASE_STORAGE_BUCKET`
 - `FIREBASE_APP_ID`
 - `FIREBASE_EMULATOR=true`
+- `VOICE_AI_MODE=local-only|local-first|gemini-first` (default: `local-only`)
+
+For low-credit operation, set `VOICE_AI_MODE=local-only`.
 
 ## Frontend connection environment
 

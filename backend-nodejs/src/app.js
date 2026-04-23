@@ -1,5 +1,6 @@
 const {handleApiRequest, listAvailableRoutes} = require('./routes');
 const {envConfig} = require('./config/env');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -75,12 +76,58 @@ function collectRequestBody(req) {
 	});
 }
 
-function writeJson(res, status, payload) {
-	const body = JSON.stringify(payload ?? {});
+function enrichPayloadWithRequestId(payload, requestId) {
+	if (!requestId || !payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		return payload;
+	}
+
+	if (payload.requestId) {
+		return payload;
+	}
+
+	return {
+		...payload,
+		requestId,
+	};
+}
+
+function writeJson(res, status, payload, requestId) {
+	const enrichedPayload = enrichPayloadWithRequestId(payload ?? {}, requestId);
+	const body = JSON.stringify(enrichedPayload);
 	res.statusCode = status;
 	res.setHeader('Content-Type', 'application/json; charset=utf-8');
 	res.setHeader('Content-Length', Buffer.byteLength(body));
 	res.end(body);
+}
+
+function generateRequestId() {
+	if (typeof crypto.randomUUID === 'function') {
+		return crypto.randomUUID();
+	}
+
+	return `req_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function resolveRequestId(headers = {}) {
+	const candidate = headers['x-request-id'];
+	if (typeof candidate === 'string' && candidate.trim()) {
+		return candidate.trim();
+	}
+
+	return generateRequestId();
+}
+
+function logRequestSummary({requestId, method, path, status, durationMs}) {
+	const summary = {
+		timestamp: new Date().toISOString(),
+		requestId,
+		method,
+		path,
+		status,
+		durationMs,
+	};
+
+	console.log(JSON.stringify(summary));
 }
 
 function resolveAllowedOrigin(origin) {
@@ -128,14 +175,24 @@ function applyCorsHeaders(req, res) {
 
 function createAppHandler() {
 	return async function appHandler(req, res) {
+		const startedAt = Date.now();
 		const method = String(req.method || '').toUpperCase();
 		const path = typeof req.url === 'string' ? req.url : '/';
+		const requestId = resolveRequestId(req.headers || {});
+		res.setHeader('X-Request-Id', requestId);
 
 		applyCorsHeaders(req, res);
 
 		if (method === 'OPTIONS') {
 			res.statusCode = 204;
 			res.end();
+			logRequestSummary({
+				requestId,
+				method,
+				path,
+				status: 204,
+				durationMs: Date.now() - startedAt,
+			});
 			return;
 		}
 
@@ -153,7 +210,14 @@ function createAppHandler() {
 		}
 
 		if (method === 'GET' && path.split('?')[0] === '/v1/routes') {
-			writeJson(res, 200, {routes: listAvailableRoutes()});
+			writeJson(res, 200, {routes: listAvailableRoutes()}, requestId);
+			logRequestSummary({
+				requestId,
+				method,
+				path,
+				status: 200,
+				durationMs: Date.now() - startedAt,
+			});
 			return;
 		}
 
@@ -161,7 +225,14 @@ function createAppHandler() {
 		const parsedBody = parseJsonBody(rawBody);
 
 		if (parsedBody === null) {
-			writeJson(res, 400, {message: 'Invalid JSON body.'});
+			writeJson(res, 400, {message: 'Invalid JSON body.'}, requestId);
+			logRequestSummary({
+				requestId,
+				method,
+				path,
+				status: 400,
+				durationMs: Date.now() - startedAt,
+			});
 			return;
 		}
 
@@ -170,9 +241,17 @@ function createAppHandler() {
 			path,
 			body: parsedBody,
 			headers: req.headers || {},
+			requestId,
 		});
 
-		writeJson(res, result.status, result.body);
+		writeJson(res, result.status, result.body, requestId);
+		logRequestSummary({
+			requestId,
+			method,
+			path,
+			status: result.status,
+			durationMs: Date.now() - startedAt,
+		});
 	};
 }
 

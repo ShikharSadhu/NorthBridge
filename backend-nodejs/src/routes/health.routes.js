@@ -1,5 +1,6 @@
 const {createFirebaseAdminConfig, hasFirestoreConnection} = require('../config/firebase');
 const {getAuthDiagnostics} = require('../middlewares/auth.middleware');
+const {envConfig} = require('../config/env');
 const pkg = require('../../package.json');
 
 const buildVersion = typeof pkg.version === 'string' ? pkg.version : '0.0.0';
@@ -20,6 +21,9 @@ const healthRoutes = [
 					firestore: {
 						configured: createFirebaseAdminConfig().configured,
 						connected: hasFirestoreConnection(),
+					},
+					voice: {
+						aiMode: envConfig.voiceAiMode,
 					},
 				},
 			};
