@@ -1,10 +1,18 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
 
 class AuthService {
-  AuthService({ApiService? apiService}) : _apiService = apiService ?? ApiService();
+  AuthService({
+    ApiService? apiService,
+    FirebaseAuth? firebaseAuth,
+  })  : _apiService = apiService ?? ApiService(),
+        _injectedFirebaseAuth = firebaseAuth;
 
   final ApiService _apiService;
+  final FirebaseAuth? _injectedFirebaseAuth;
+  FirebaseAuth? _firebaseAuth;
 
   static List<Map<String, dynamic>> _userStore = const [];
 
@@ -18,7 +26,55 @@ class AuthService {
     ApiService.setGlobalBearerToken(null);
   }
 
+  Future<void> _ensureFirebaseInitialized() async {
+    if (Firebase.apps.isNotEmpty) {
+      return;
+    }
+
+    await Firebase.initializeApp();
+  }
+
+  Future<FirebaseAuth> _getFirebaseAuth() async {
+    if (_injectedFirebaseAuth != null) {
+      return _injectedFirebaseAuth!;
+    }
+
+    await _ensureFirebaseInitialized();
+    _firebaseAuth ??= FirebaseAuth.instance;
+    return _firebaseAuth!;
+  }
+
+  Future<String?> _resolveIdToken({bool forceRefresh = false}) async {
+    try {
+      final firebaseAuth = await _getFirebaseAuth();
+      final user = firebaseAuth.currentUser;
+      if (user == null) {
+        return null;
+      }
+
+      final token = await user.getIdToken(forceRefresh);
+      if (token == null || token.trim().isEmpty) {
+        return null;
+      }
+
+      return token;
+    } on FirebaseException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<UserModel?> getCurrentUser() async {
+    final token = await _resolveIdToken();
+    if (token == null) {
+      clearSessionToken();
+      _currentUser = null;
+      return null;
+    }
+
+    setSessionToken(token);
+
     try {
       final response = await _apiService.getJson('/v1/auth/me');
       final rawUser = response['user'];
@@ -91,9 +147,14 @@ class AuthService {
   }
 
   Future<UserModel?> signInSession({String? idToken}) async {
-    if (idToken != null && idToken.trim().isNotEmpty) {
-      setSessionToken(idToken);
+    final resolvedToken =
+        (idToken != null && idToken.trim().isNotEmpty) ? idToken : await _resolveIdToken();
+    if (resolvedToken == null) {
+      clearSessionToken();
+      return null;
     }
+
+    setSessionToken(resolvedToken);
 
     try {
       final response = await _apiService.postJson('/v1/auth/login');
@@ -117,8 +178,19 @@ class AuthService {
   Future<UserModel?> signInWithCredentials({
     required String email,
     required String password,
-    required String idToken,
   }) async {
+    final firebaseAuth = await _getFirebaseAuth();
+    final credential = await firebaseAuth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+
+    final idToken = await credential.user?.getIdToken(true);
+    if (idToken == null || idToken.trim().isEmpty) {
+      clearSessionToken();
+      return null;
+    }
+
     setSessionToken(idToken);
     try {
       final response = await _apiService.postJson(
@@ -149,8 +221,22 @@ class AuthService {
     required String location,
     required String email,
     required String password,
-    required String idToken,
   }) async {
+    final firebaseAuth = await _getFirebaseAuth();
+    final credential = await firebaseAuth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+
+    if (name.trim().isNotEmpty) {
+      await credential.user?.updateDisplayName(name.trim());
+    }
+
+    final idToken = await credential.user?.getIdToken(true);
+    if (idToken == null || idToken.trim().isEmpty) {
+      throw Exception('Unable to obtain Firebase ID token.');
+    }
+
     setSessionToken(idToken);
     try {
       final response = await _apiService.postJson(
@@ -180,9 +266,11 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    final firebaseAuth = await _getFirebaseAuth();
     try {
       await _apiService.postJson('/v1/auth/logout');
     } finally {
+      await firebaseAuth.signOut();
       clearSessionToken();
       _currentUser = null;
     }

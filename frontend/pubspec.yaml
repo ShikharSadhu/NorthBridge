@@ -15,7 +15,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   provider: ^6.0.5
   http: ^1.2.0
-  firebase_data_connect: ^0.1.5
+  firebase_core: ^4.7.0
+  firebase_auth: ^6.4.0
+  firebase_data_connect: ^0.3.0
   speech_to_text: ^6.6.0
   geolocator: ^11.0.0
   google_maps_flutter: ^2.5.0

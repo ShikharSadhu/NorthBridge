@@ -89,7 +89,6 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> signIn({
     required String email,
     required String password,
-    required String idToken,
   }) async {
     _isMutating = true;
     notifyListeners();
@@ -98,7 +97,6 @@ class AuthProvider extends ChangeNotifier {
       final user = await _authService.signInWithCredentials(
         email: email,
         password: password,
-        idToken: idToken,
       );
 
       if (user == null) {
@@ -129,7 +127,6 @@ class AuthProvider extends ChangeNotifier {
     required String location,
     required String email,
     required String password,
-    required String idToken,
   }) async {
     _isMutating = true;
     notifyListeners();
@@ -140,7 +137,6 @@ class AuthProvider extends ChangeNotifier {
         location: location,
         email: email,
         password: password,
-        idToken: idToken,
       );
       _state = ViewState<UserModel>.success(user);
       return true;

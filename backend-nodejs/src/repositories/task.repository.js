@@ -2,6 +2,8 @@ const {getRequiredFirestoreDb} = require('../config/firebase');
 const {buildPrefixedId} = require('../utils/id.util');
 const {toTaskRecord, normalizeString} = require('../models/task.model');
 
+const taskWriteThroughCache = new Map();
+
 function normalizeExecutionMode(value) {
 	const normalized = normalizeString(value).toLowerCase();
 	return normalized === 'online' ? 'online' : 'offline';
@@ -65,10 +67,37 @@ function normalizeTaskRecord(record) {
 	};
 }
 
+function upsertTaskCache(record) {
+	const normalized = normalizeTaskRecord(record);
+	if (!normalized || !normalized.id) {
+		return null;
+	}
+
+	taskWriteThroughCache.set(normalized.id, normalized);
+	return normalized;
+}
+
+function mergeWithTaskCache(records) {
+	const byId = new Map();
+	for (const record of records) {
+		if (!record || !record.id) {
+			continue;
+		}
+		byId.set(record.id, record);
+	}
+
+	for (const [taskId, record] of taskWriteThroughCache.entries()) {
+		byId.set(taskId, record);
+	}
+
+	return Array.from(byId.values());
+}
+
 async function listTaskRecords() {
 	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('tasks').get();
-	return snapshot.docs.map((doc) => normalizeTaskRecord({id: doc.id, ...doc.data()}));
+	const records = snapshot.docs.map((doc) => normalizeTaskRecord({id: doc.id, ...doc.data()}));
+	return mergeWithTaskCache(records);
 }
 
 async function getTaskRecordById(taskId) {
@@ -80,10 +109,10 @@ async function getTaskRecordById(taskId) {
 	const db = getRequiredFirestoreDb();
 	const snapshot = await db.collection('tasks').doc(normalizedTaskId).get();
 	if (!snapshot.exists) {
-		return null;
+		return taskWriteThroughCache.get(normalizedTaskId) || null;
 	}
 
-	return normalizeTaskRecord({id: snapshot.id, ...snapshot.data()});
+	return upsertTaskCache({id: snapshot.id, ...snapshot.data()});
 }
 
 async function listTasks() {
@@ -126,6 +155,7 @@ async function createTask(input) {
 
 	const db = getRequiredFirestoreDb();
 	await db.collection('tasks').doc(created.id).set(created);
+	upsertTaskCache(created);
 
 	return toTaskRecord(created);
 }
@@ -144,7 +174,7 @@ async function updateTaskRecord(taskId, updates = {}) {
 	}
 
 	await ref.set(updates, {merge: true});
-	return normalizeTaskRecord({id: snapshot.id, ...snapshot.data(), ...updates});
+	return upsertTaskCache({id: snapshot.id, ...snapshot.data(), ...updates});
 }
 
 async function acceptTask(taskId, acceptedByUserId) {

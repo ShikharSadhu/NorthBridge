@@ -91,9 +91,22 @@ Required JSON shape:
   "scheduledAt": "ISO-8601 datetime",
   "executionMode": "online|offline",
   "acceptedByUserId": "string|null",
-  "acceptedAt": "ISO-8601 datetime|null"
+  "acceptedAt": "ISO-8601 datetime|null",
+  "isActive": true,
+  "completionRequestedByUserId": "string|null",
+  "completionRequestedAt": "ISO-8601 datetime|null",
+  "completedByUserId": "string|null",
+  "completedAt": "ISO-8601 datetime|null",
+  "isRatingPending": false,
+  "completionRating": 4.5,
+  "ratedAt": "ISO-8601 datetime|null"
 }
 ```
+
+Lifecycle notes:
+- `isActive=true` means task should appear in ongoing sections; `isActive=false` means past/completed.
+- Accepted task must remain active until owner confirms completion.
+- After completion confirmation, set `isRatingPending=true` so owner can rate helper.
 
 Sorting options expected by UI:
 
@@ -191,7 +204,20 @@ Replace in `frontend/lib/services/task_service.dart`:
 - `fetchTasks(sortBy)` -> `GET /tasks?sort=...`
 - `createTask(...)` -> `POST /tasks`
 - `acceptTask(taskId,userId)` -> `POST /tasks/:id/accept`
+- `requestTaskCompletion(taskId,helperUserId)` -> `POST /tasks/:id/completion/request`
+- `confirmTaskCompletion(taskId,ownerUserId)` -> `POST /tasks/:id/completion/confirm`
+- `declineTaskCompletion(taskId,ownerUserId)` -> `POST /tasks/:id/completion/decline`
+- `submitTaskRating(taskId,ownerUserId,rating)` -> `POST /tasks/:id/rating`
 - `processVoiceInput(text)` -> `POST /voice/tasks/parse` (optional server parser)
+
+## 3.4 Profile rating update endpoint
+Replace in `frontend/lib/services/auth_service.dart`:
+- `submitRatingForUser(targetUserId,rating)` -> `POST /users/:id/rating`
+
+Expected backend behavior:
+- Recompute and persist user aggregate rating.
+- Increment `tasksDone` after successful completion rating.
+- Return updated public-safe user profile.
 
 ## 3.3 Chat endpoints
 Replace in `frontend/lib/services/chat_service.dart`:
@@ -372,6 +398,9 @@ What remains hardcoded in UI by design:
 - [ ] Implement user-report endpoint and moderation workflow.
 - [ ] Replace test-data imports in services with API calls.
 - [ ] Keep provider and model APIs stable to avoid UI regressions.
+- [ ] Implement completion request/confirm/decline task endpoints.
+- [ ] Persist `isActive` and completion metadata transitions correctly.
+- [ ] Implement post-completion rating endpoints and user aggregate update.
 
 ---
 
@@ -477,4 +506,57 @@ Suggested success response:
 ### Optional but recommended side effects
 - Auto-open/create chat between owner and accepter.
 - Emit realtime `task.updated` event so all clients refresh immediately.
+
+## 10.4 Task completion confirmation + rating flow (new)
+
+### Completion request (helper action)
+- Screen action: `frontend/lib/screens/chat/chat_thread_screen.dart` (`Mark task as done`)
+- Provider: `frontend/lib/providers/task_provider.dart` (`requestTaskCompletion`)
+- Service: `frontend/lib/services/task_service.dart` (`requestTaskCompletion`)
+- Endpoint target: `POST /tasks/:id/completion/request`
+
+Backend must enforce:
+1. Task exists.
+2. Requester is the accepted helper (`acceptedByUserId`).
+3. Task is still active (`isActive=true`).
+4. Set:
+  - `completionRequestedByUserId = <helperId>`
+  - `completionRequestedAt = <server timestamp>`
+
+### Completion confirm/decline (owner action)
+- Confirm endpoint: `POST /tasks/:id/completion/confirm`
+- Decline endpoint: `POST /tasks/:id/completion/decline`
+
+On confirm backend must set:
+- `isActive = false`
+- `completedByUserId = <helperId>`
+- `completedAt = <server timestamp>`
+- `isRatingPending = true`
+- Keep or clear request metadata per backend convention (frontend supports either).
+
+On decline backend must set:
+- `completionRequestedByUserId = null`
+- `completionRequestedAt = null`
+- Keep `isActive = true`
+
+### Rating after completion (owner action)
+- Screen action: `frontend/lib/screens/chat/chat_thread_screen.dart` (`Rate the helper`)
+- Provider/service path:
+  - Task: `TaskProvider.submitTaskRating` -> `TaskService.submitTaskRating`
+  - Profile: `AuthProvider.submitRatingForUser` -> `AuthService.submitRatingForUser`
+
+Backend must atomically ensure:
+1. Task is completed and still rating-pending.
+2. Rating author is task owner.
+3. Rating target is completed helper.
+4. Set task fields:
+  - `completionRating = <1..5>`
+  - `ratedAt = <server timestamp>`
+  - `isRatingPending = false`
+5. Update helper profile aggregates (`rating`, `tasksDone`).
+
+### Display rules expected by frontend
+- Ongoing vs past sections are driven by `isActive`, not `scheduledAt`.
+- Owner sees confirm/decline only when completion request is pending.
+- Owner sees rating prompt only when task is completed and `isRatingPending=true`.
 
