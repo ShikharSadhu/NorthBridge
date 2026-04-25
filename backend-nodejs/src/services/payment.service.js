@@ -11,6 +11,7 @@ const {
 	validateUpdatePaymentRequestPayload,
 } = require('../validators/payment.validator');
 const {success, failure} = require('../utils/response.util');
+const paymentEvents = require('./payment-events.service');
 
 function canTransitionPaymentStatus(existing, desired, actorUserId) {
 	if (!existing || !desired) {
@@ -77,6 +78,7 @@ async function createPaymentRequestEntry(payload = {}) {
 	}
 
 	const created = await createPaymentRequest(validation.value);
+	Promise.resolve(paymentEvents.notifyPaymentRequested(created)).catch(() => {});
 	return success(201, created);
 }
 
@@ -128,6 +130,7 @@ async function updatePaymentRequestStatusEntry(requestId, payload = {}) {
 				: new Date().toISOString(),
 	};
 	const updated = await updatePaymentRequest(requestId, updates);
+	Promise.resolve(paymentEvents.notifyPaymentUpdated(updated)).catch(() => {});
 	return success(200, updated);
 }
 

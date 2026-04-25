@@ -1,21 +1,35 @@
 const http = require('http');
 const WebSocket = require('ws');
+const websocketService = require('./services/websocket.service');
 const admin = require('firebase-admin');
+const authMiddleware = require('./middlewares/auth.middleware');
+const initializeFirebaseAuth =
+	authMiddleware && typeof authMiddleware.initializeFirebaseAuth === 'function'
+		? authMiddleware.initializeFirebaseAuth
+		: () => {
+			  if (!admin.apps.length) {
+				  try {
+					  admin.initializeApp({
+						  credential: admin.credential.applicationDefault(),
+					  });
+					  return true;
+				  } catch (_e) {
+					  return false;
+				  }
+			  }
+			  return true;
+		  };
 const { createAppHandler } = require('./app');
 const { envConfig } = require('./config/env');
 
-// 🔥 Initialize Firebase Admin
-if (!admin.apps.length) {
-	admin.initializeApp({
-		credential: admin.credential.applicationDefault(),
-	});
+// 🔥 Initialize Firebase Admin (use middleware initializer for consistent config)
+const _firebaseInitOk = initializeFirebaseAuth();
+if (!_firebaseInitOk) {
+	console.warn('Firebase admin failed to initialize. WebSocket auth may be unavailable.');
 }
 
 // WebSocket utilities (exported)
-let websocketUtils = {
-	broadcast: () => {},
-	sendToUser: () => {},
-};
+// websocketService will be registered with the created WebSocket.Server below
 
 function startServer(options = {}) {
 	const port = Number.isFinite(options.port) ? options.port : envConfig.port;
@@ -47,15 +61,41 @@ function startServer(options = {}) {
 			const url = new URL(req.url, 'http://localhost');
 			const token = url.searchParams.get('token');
 
-			if (!token) {
-				console.log('❌ Missing token');
-				ws.close();
-				return;
-			}
+			let userId;
+			const wsAuthAvailable = Boolean(_firebaseInitOk);
 
-			// 🔥 VERIFY TOKEN
-			const decoded = await admin.auth().verifyIdToken(token);
-			const userId = decoded.uid;
+			if (token) {
+				if (wsAuthAvailable) {
+					// Prefer centralized verifier from auth.middleware
+					try {
+						const decoded = await authMiddleware.verifyIdToken(token);
+						userId = decoded.uid;
+					} catch (err) {
+						console.log('❌ Invalid token:', err.message || err);
+						ws.close();
+						return;
+					}
+				} else {
+					if (process.env.ALLOW_WS_AUTH_OVERRIDE !== 'true') {
+						console.log('❌ Firebase unavailable for token verification');
+						ws.close();
+						return;
+					}
+
+					userId = token;
+					console.log('⚠️ WS token override used while Firebase is unavailable:', userId);
+				}
+			} else {
+				const override = url.searchParams.get('x-user-id');
+				if (override && (process.env.ALLOW_WS_AUTH_OVERRIDE === 'true' || !wsAuthAvailable)) {
+					userId = override;
+					console.log('🔌 WS auth override used for user:', userId);
+				} else {
+					console.log('❌ Missing token');
+					ws.close();
+					return;
+				}
+			}
 
 			ws.userId = userId;
 
@@ -83,13 +123,13 @@ function startServer(options = {}) {
 				console.log(`❌ Disconnected: ${userId}`);
 			});
 		} catch (err) {
-			console.log('❌ Invalid token:', err.message);
+			console.log('❌ WS connection error:', err.message || err);
 			ws.close();
 		}
 	});
 
 	// 🔥 HEARTBEAT LOOP (kill dead clients)
-	const interval = setInterval(() => {
+	const heartbeatInterval = setInterval(() => {
 		wss.clients.forEach((ws) => {
 			if (ws.isAlive === false) {
 				console.log(`💀 Terminating: ${ws.userId}`);
@@ -102,37 +142,41 @@ function startServer(options = {}) {
 	}, 30000);
 
 	wss.on('close', () => {
-		clearInterval(interval);
+		clearInterval(heartbeatInterval);
 	});
 
-	// 🔥 Send to ALL
-	websocketUtils.broadcast = function (data) {
-		const msg = JSON.stringify(data);
-		wss.clients.forEach((client) => {
-			if (client.readyState === WebSocket.OPEN) {
-				client.send(msg);
-			}
-		});
-	};
-
-	// 🔥 Send to ONE
-	websocketUtils.sendToUser = function (userId, data) {
-		const msg = JSON.stringify(data);
-		wss.clients.forEach((client) => {
-			if (
-				client.readyState === WebSocket.OPEN &&
-				client.userId === userId
-			) {
-				client.send(msg);
-			}
-		});
-	};
+	// Register WSS with websocketService for broadcast/sendToUser
+	websocketService.setServer(wss);
 
 	// 🔌 =========================
 
+	function stop() {
+		clearInterval(heartbeatInterval);
+		websocketService.setServer(null);
+		for (const client of wss.clients) {
+			client.terminate();
+		}
+
+		return new Promise((resolve, reject) => {
+			wss.close((wssError) => {
+				server.close((serverError) => {
+					const error = wssError || serverError;
+					if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+						reject(error);
+						return;
+					}
+
+					resolve();
+				});
+			});
+		});
+	}
+
 	return new Promise((resolve) => {
 		server.listen(port, host, () => {
-			resolve({ server, port, host });
+			const address = server.address();
+			const actualPort = address && typeof address === 'object' ? address.port : port;
+			resolve({ server, wss, port: actualPort, host, stop });
 		});
 	});
 }
@@ -147,5 +191,4 @@ if (require.main === module) {
 
 module.exports = {
 	startServer,
-	websocketUtils,
 };

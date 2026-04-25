@@ -18,7 +18,23 @@ class ChatProvider extends ChangeNotifier {
       ViewState<List<MessageModel>>.empty();
   ViewState<List<MessageModel>> get messagesState => _messagesState;
   bool _isSendingMessage = false;
+  String? _activeChatId;
   bool get isSendingMessage => _isSendingMessage;
+
+  void applyRealtimeEvent(dynamic event) {
+    if (event is! Map) {
+      return;
+    }
+
+    final type = event['type'];
+    final data = event['data'];
+    if (type != 'NEW_MESSAGE' || data is! Map) {
+      return;
+    }
+
+    final message = MessageModel.fromJson(Map<String, dynamic>.from(data));
+    _upsertRealtimeMessage(message);
+  }
 
   Future<void> loadChats() async {
     _state = ViewState<List<ChatModel>>.loading(previousData: _state.data);
@@ -41,6 +57,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> loadMessages(String chatId) async {
+    _activeChatId = chatId;
     _messagesState = ViewState<List<MessageModel>>.loading(
       previousData: _messagesState.data,
     );
@@ -140,5 +157,43 @@ class ChatProvider extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  void _upsertRealtimeMessage(MessageModel message) {
+    if (_activeChatId == message.chatId) {
+      final currentMessages =
+          List<MessageModel>.from(_messagesState.data ?? const []);
+      final messageIndex =
+          currentMessages.indexWhere((item) => item.id == message.id);
+      if (messageIndex < 0) {
+        currentMessages.add(message);
+      } else {
+        currentMessages[messageIndex] = message;
+      }
+
+      currentMessages
+          .sort((left, right) => left.timestamp.compareTo(right.timestamp));
+      _messagesState = ViewState<List<MessageModel>>.success(currentMessages);
+    }
+
+    final chats = List<ChatModel>.from(_state.data ?? const []);
+    final chatIndex = chats.indexWhere((chat) => chat.chatId == message.chatId);
+    if (chatIndex >= 0) {
+      final current = chats[chatIndex];
+      chats[chatIndex] = ChatModel(
+        chatId: current.chatId,
+        taskId: current.taskId,
+        taskTitle: current.taskTitle,
+        taskOwnerUserId: current.taskOwnerUserId,
+        taskOwnerName: current.taskOwnerName,
+        users: current.users,
+        lastMessage: message,
+      );
+      _state = ViewState<List<ChatModel>>.success(chats);
+    } else {
+      loadChats();
+    }
+
+    notifyListeners();
   }
 }

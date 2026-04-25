@@ -52,6 +52,14 @@ function normalizeHeaders(headers) {
 	return result;
 }
 
+function resolveHeaders(input = {}) {
+	if (input && typeof input === 'object' && !Array.isArray(input) && input.headers) {
+		return input.headers;
+	}
+
+	return input;
+}
+
 function getAuthMode() {
 	return 'firebase';
 }
@@ -77,6 +85,13 @@ function parseServiceAccount(value) {
 	return null;
 }
 
+/**
+ * Initializes Firebase Admin auth using FIREBASE_CREDENTIALS_JSON, a credentials
+ * file path, or application default credentials.
+ *
+ * @returns {boolean} true when Firebase Admin auth is available; false when
+ * credentials are missing or invalid.
+ */
 function initializeFirebaseAuth() {
 	if (firebaseAuthInitState.initialized) {
 		return true;
@@ -111,8 +126,8 @@ function initializeFirebaseAuth() {
 	}
 }
 
-function extractBearerToken(headers) {
-	const normalized = normalizeHeaders(headers);
+function extractBearerToken(input) {
+	const normalized = normalizeHeaders(resolveHeaders(input));
 	const authorization = normalized.authorization?.trim();
 	if (!authorization) {
 		return undefined;
@@ -127,8 +142,17 @@ function extractBearerToken(headers) {
 	return token || undefined;
 }
 
-async function extractFirebaseAuthContext(headers) {
-	const token = extractBearerToken(headers);
+/**
+ * Extracts the Firebase auth context from an HTTP request or headers object.
+ *
+ * Contract:
+ * - Reads `Authorization: Bearer <idToken>`.
+ * - Verifies with Firebase Admin and returns `{userId, email, name}` from token claims.
+ * - Does not trust body `userId` or `x-user-id`; tests may mock `getAuthContext`.
+ * - Returns structured auth error fields instead of throwing for route handling.
+ */
+async function extractFirebaseAuthContext(input) {
+	const token = extractBearerToken(input);
 	if (!token) {
 		return {
 			userId: undefined,
@@ -174,8 +198,27 @@ async function extractFirebaseAuthContext(headers) {
 	}
 }
 
+/**
+ * Verifies a Firebase ID token and returns the decoded Firebase claims.
+ *
+ * @param {string} token Firebase ID token from HTTP Authorization or WS query.
+ * @returns {Promise<object>} decoded token with at least `uid` when valid.
+ * @throws when token is missing, Firebase is unavailable, or verification fails.
+ */
+async function verifyIdToken(token) {
+	if (!token || typeof token !== 'string') {
+		throw new Error('missing_token');
+	}
+
+	if (!initializeFirebaseAuth()) {
+		throw new Error('firebase_unavailable');
+	}
+
+	return await admin.auth().verifyIdToken(token, true);
+}
+
 async function getAuthContext(input = {}) {
-	const headers = input.headers || input;
+	const headers = resolveHeaders(input);
 	const auth = await extractFirebaseAuthContext(headers);
 	const userId = auth.userId;
 
@@ -242,4 +285,6 @@ module.exports = {
 	authMiddleware,
 	getAuthDiagnostics,
 	getAuthMode,
+	initializeFirebaseAuth,
+	verifyIdToken,
 };

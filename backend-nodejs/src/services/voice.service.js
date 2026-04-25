@@ -264,7 +264,15 @@ function parseVoiceTask(payload = {}) {
 		return failure(400, 'Transcript is required.');
 	}
 
-	return success(200, parseVoiceTaskDraft(validation.value.transcript));
+	const draft = parseVoiceTaskDraft(validation.value.transcript);
+	// Do not block: controllers may expect immediate draft; notify via websocket if requested
+	// If payload.userId is provided, emit VOICE_PARSED for that user
+	if (typeof validation.value.userId === 'string' && validation.value.userId.trim()) {
+		const eventService = require('./event.service');
+		Promise.resolve(eventService.notifyNewMessage({users: [validation.value.userId]}, {senderId: '', ...draft})).catch(() => {});
+	}
+
+	return success(200, draft);
 }
 
 module.exports = {

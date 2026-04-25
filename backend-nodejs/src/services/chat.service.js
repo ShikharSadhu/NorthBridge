@@ -15,6 +15,7 @@ const {
 	validateChatQueryPayload,
 } = require('../validators/chat.validator');
 const {success, failure} = require('../utils/response.util');
+const eventService = require('./event.service');
 
 function parsePositiveInt(value, fallback) {
 	let numeric = value;
@@ -109,8 +110,20 @@ async function createMessageEntry(payload = {}) {
 	}
 
 	const message = await createMessage(validation.value);
-	await updateChatLastMessage(validation.value.chatId, message);
-	return success(201, message);
+	const updated = await updateChatLastMessage(validation.value.chatId, message);
+
+	// Attach receiverId for convenience (the other chat participant)
+	const users = Array.isArray(updated?.users) ? updated.users : [];
+	const receiverId = users.find((u) => u !== message.senderId) || undefined;
+	const extendedMessage = {
+		...message,
+		receiverId,
+	};
+
+	// Notify via websocket and notifications (non-blocking)
+	Promise.resolve(eventService.notifyNewMessage(updated, extendedMessage)).catch(() => {});
+
+	return success(201, extendedMessage);
 }
 
 async function openOrCreateTaskChatEntry(payload = {}) {

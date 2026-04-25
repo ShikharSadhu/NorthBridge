@@ -19,6 +19,7 @@ const {
 } = require('../validators/task.validator');
 const {success, failure} = require('../utils/response.util');
 const {isValidGeoPoint, calculateRoundedDistanceKm} = require('../utils/geo.utils');
+const eventService = require('./event.service');
 
 function parseNumber(value) {
 	if (typeof value === 'number' && Number.isFinite(value)) {
@@ -223,6 +224,8 @@ async function createTaskEntry(payload = {}) {
 	}
 
 	const task = await createTask(validation.value);
+	// publish event but don't block response
+	Promise.resolve(eventService.notifyTaskCreated(task)).catch(() => {});
 	return success(201, task);
 }
 
@@ -247,6 +250,7 @@ async function acceptTaskEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await acceptTask(taskId, validation.value.acceptedByUserId);
+	Promise.resolve(eventService.notifyTaskAccepted(updatedTask)).catch(() => {});
 	return success(200, updatedTask);
 }
 
@@ -271,6 +275,7 @@ async function requestTaskCompletionEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await requestTaskCompletion(taskId, validation.value.helperUserId);
+	Promise.resolve(eventService.notifyTaskCompletionRequested(updatedTask)).catch(() => {});
 	return success(200, updatedTask);
 }
 
@@ -295,6 +300,7 @@ async function confirmTaskCompletionEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await confirmTaskCompletion(taskId);
+	Promise.resolve(eventService.notifyTaskCompleted(updatedTask)).catch(() => {});
 	return success(200, updatedTask);
 }
 
@@ -319,6 +325,7 @@ async function declineTaskCompletionEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await declineTaskCompletion(taskId);
+	Promise.resolve(eventService.notifyTaskCompletionDeclined(updatedTask)).catch(() => {});
 	return success(200, updatedTask);
 }
 
@@ -343,6 +350,7 @@ async function submitTaskRatingEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await submitTaskRating(taskId, validation.value.rating);
+	// rating events are mostly internal; if needed, hook here
 	return success(200, updatedTask);
 }
 
@@ -368,6 +376,7 @@ async function cancelTaskEntry(taskId, payload = {}) {
 	}
 
 	const updatedTask = await cancelTask(taskId);
+	Promise.resolve(eventService.notifyTaskCancelled(updatedTask)).catch(() => {});
 	return success(200, updatedTask);
 }
 

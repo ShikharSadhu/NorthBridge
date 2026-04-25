@@ -11,6 +11,7 @@ const {
 	validateUpdateReportStatusPayload,
 } = require('../validators/report.validator');
 const {success, failure} = require('../utils/response.util');
+const eventService = require('./event.service');
 
 async function createUserReportEntry(targetUserId, payload = {}, authUserId = '') {
 	const normalizedTargetId = typeof targetUserId === 'string' ? targetUserId.trim() : '';
@@ -41,6 +42,7 @@ async function createUserReportEntry(targetUserId, payload = {}, authUserId = ''
 		details: validation.value.details,
 	});
 
+	Promise.resolve(eventService.notifyReportCreated(report)).catch(() => {});
 	return success(201, report);
 }
 
@@ -73,6 +75,7 @@ async function createMessageReportEntry(messageId, payload = {}, authUserId = ''
 		details: validation.value.details,
 	});
 
+	Promise.resolve(eventService.notifyReportCreated(report)).catch(() => {});
 	return success(201, report);
 }
 
@@ -103,6 +106,7 @@ async function updateReportStatusEntry(reportId, payload = {}) {
 	}
 
 	const updated = await updateReportStatus(normalizedReportId, validation.value.status);
+	Promise.resolve(eventService.notifyReportUpdated(updated)).catch(() => {});
 	return success(200, updated);
 }
 

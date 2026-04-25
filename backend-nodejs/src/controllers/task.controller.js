@@ -1,4 +1,3 @@
-const { websocketUtils } = require('../server');
 const taskService = require('../services/task.service');
 const chatService = require('../services/chat.service');
 const voiceService = require('../services/voice.service');
@@ -71,9 +70,20 @@ async function listTasksWithFilterController(payload = {}) {
 }
 
 async function getMyTaskHistoryController(authUserId = '', payload = {}) {
+	const actor = resolveActorId(payload.userId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				tasks: [],
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const result = await taskService.fetchMyTaskHistory({
 		...payload,
-		userId: authUserId || payload.userId,
+		userId: actor.id,
 	});
 	if (!result.ok) {
 		return {
@@ -101,8 +111,24 @@ async function getTaskController(taskId, payload = {}) {
 	};
 }
 
-async function createTaskController(payload = {}) {
-	const result = await taskService.createTaskEntry(payload);
+async function createTaskController(payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.postedByUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				task: null,
+				message: actor.error.message,
+			},
+		};
+	}
+
+	const mergedPayload = {
+		...payload,
+		postedByUserId: actor.id,
+	};
+
+	const result = await taskService.createTaskEntry(mergedPayload);
 	if (!result.ok) {
 		return {
 			status: result.status,
@@ -113,24 +139,28 @@ async function createTaskController(payload = {}) {
 		};
 	}
 
-	// Notify all users
-websocketUtils.broadcast({
-	type: "TASK_CREATED",
-	data: result.data
-});
-
-return {
-	status: result.status,
-	body: {
-		task: result.data,
-	},
-};
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
 }
 
 async function acceptTaskController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.acceptedByUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		acceptedByUserId: payload.acceptedByUserId || authUserId,
+		acceptedByUserId: actor.id,
 	};
 
 	const result = await taskService.acceptTaskEntry(taskId, mergedPayload);
@@ -144,15 +174,6 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 		};
 	}
 
-	// MUST BE BEFORE return
-	websocketUtils.sendToUser(result.data.postedByUserId, {
-		type: "TASK_ACCEPTED",
-		data: {
-			taskId: result.data.id,
-			acceptedBy: result.data.acceptedByUserId
-		}
-	});
-
 	return {
 		status: result.status,
 		body: {
@@ -161,9 +182,19 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 	};
 }
 async function requestTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.helperUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		helperUserId: payload.helperUserId || authUserId,
+		helperUserId: actor.id,
 	};
 	const result = await taskService.requestTaskCompletionEntry(taskId, mergedPayload);
 	if (!result.ok) {
@@ -184,9 +215,19 @@ async function requestTaskCompletionController(taskId, payload = {}, authUserId 
 }
 
 async function confirmTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		ownerUserId: payload.ownerUserId || authUserId,
+		ownerUserId: actor.id,
 	};
 	const result = await taskService.confirmTaskCompletionEntry(taskId, mergedPayload);
 	if (!result.ok) {
@@ -207,9 +248,19 @@ async function confirmTaskCompletionController(taskId, payload = {}, authUserId 
 }
 
 async function declineTaskCompletionController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		ownerUserId: payload.ownerUserId || authUserId,
+		ownerUserId: actor.id,
 	};
 	const result = await taskService.declineTaskCompletionEntry(taskId, mergedPayload);
 	if (!result.ok) {
@@ -230,9 +281,19 @@ async function declineTaskCompletionController(taskId, payload = {}, authUserId 
 }
 
 async function submitTaskRatingController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		ownerUserId: payload.ownerUserId || authUserId,
+		ownerUserId: actor.id,
 	};
 	const result = await taskService.submitTaskRatingEntry(taskId, mergedPayload);
 	if (!result.ok) {
@@ -253,9 +314,19 @@ async function submitTaskRatingController(taskId, payload = {}, authUserId = '')
 }
 
 async function completeTaskController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
 	const mergedPayload = {
 		...payload,
-		ownerUserId: payload.ownerUserId || authUserId,
+		ownerUserId: actor.id,
 	};
 
 	const result = await taskService.completeTaskEntry(taskId, mergedPayload);
@@ -269,12 +340,6 @@ async function completeTaskController(taskId, payload = {}, authUserId = '') {
 		};
 	}
 
-	// ✅ BEFORE return
-	websocketUtils.sendToUser(result.data.postedByUserId, {
-		type: "TASK_COMPLETED",
-		data: result.data
-	});
-
 	return {
 		status: result.status,
 		body: {
@@ -283,9 +348,18 @@ async function completeTaskController(taskId, payload = {}, authUserId = '') {
 	};
 }
 async function cancelTaskController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
 	const mergedPayload = {
 		...payload,
-		ownerUserId: payload.ownerUserId || authUserId,
+		ownerUserId: actor.id,
 	};
 	const result = await taskService.cancelTaskEntry(taskId, mergedPayload);
 	if (!result.ok) {
@@ -379,22 +453,6 @@ async function sendMessageController(chatId, payload = {}, authUserId = '') {
 
 	// 🔥 TARGETED DELIVERY (NO BROADCAST)
 
-	// Send to receiver (if exists)
-	if (message.receiverId) {
-		websocketUtils.sendToUser(message.receiverId, {
-			type: "NEW_MESSAGE",
-			data: message
-		});
-	}
-
-	// Send back to sender (to sync UI)
-	if (message.senderId) {
-		websocketUtils.sendToUser(message.senderId, {
-			type: "NEW_MESSAGE",
-			data: message
-		});
-	}
-
 	return {
 		status: result.status,
 		body: {
@@ -447,7 +505,7 @@ async function openOrCreateTaskChatController(payload = {}, authUserId = '') {
 	};
 }
 
-async function parseVoiceTaskController(payload = {}) {
+async function parseVoiceTaskController(payload = {}, authUserId = '') {
 	const result = await voiceService.parseVoiceTask(payload);
 
 	if (!result.ok) {
@@ -460,13 +518,19 @@ async function parseVoiceTaskController(payload = {}) {
 		};
 	}
 
-	// ✅ BEFORE return
-	if (payload.userId) {
-		websocketUtils.sendToUser(payload.userId, {
-			type: "VOICE_PARSED",
-			data: result.data
-		});
+	// ✅ BEFORE return - prefer authenticated user, fall back to payload.userId
+	const actor = resolveActorId(payload.userId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				draft: null,
+				message: actor.error.message,
+			},
+		};
 	}
+
+	// Event publication handled by voice service; controller simply returns the draft
 
 	return {
 		status: result.status,

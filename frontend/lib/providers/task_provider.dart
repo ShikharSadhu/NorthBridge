@@ -77,6 +77,31 @@ class TaskProvider extends ChangeNotifier {
   double? get acceptorLat => _acceptorLat;
   double? get acceptorLng => _acceptorLng;
 
+  void applyRealtimeEvent(dynamic event) {
+    if (event is! Map) {
+      return;
+    }
+
+    final type = event['type'];
+    final data = event['data'];
+    if (type is! String || data is! Map) {
+      return;
+    }
+
+    switch (type) {
+      case 'TASK_CREATED':
+      case 'TASK_COMPLETION_REQUESTED':
+      case 'TASK_COMPLETED':
+      case 'TASK_COMPLETION_DECLINED':
+      case 'TASK_CANCELLED':
+        _upsertRealtimeTask(Map<String, dynamic>.from(data));
+        return;
+      case 'TASK_ACCEPTED':
+        _applyTaskAccepted(Map<String, dynamic>.from(data));
+        return;
+    }
+  }
+
   void setAcceptorLocation({double? lat, double? lng}) {
     _acceptorLat = lat;
     _acceptorLng = lng;
@@ -118,6 +143,48 @@ class TaskProvider extends ChangeNotifier {
 
   Future<void> retry() async {
     await loadTasks();
+  }
+
+  void _upsertRealtimeTask(Map<String, dynamic> rawTask) {
+    final taskId = rawTask['id'];
+    if (taskId is! String || taskId.isEmpty) {
+      return;
+    }
+
+    final task = TaskModel.fromJson(rawTask);
+    final next = List<TaskModel>.from(_cachedTasks);
+    final index = next.indexWhere((item) => item.id == task.id);
+    if (index < 0) {
+      next.insert(0, task);
+    } else {
+      next[index] = task;
+    }
+
+    _cachedTasks = next;
+    _state = ViewState<List<TaskModel>>.success(next);
+    notifyListeners();
+  }
+
+  void _applyTaskAccepted(Map<String, dynamic> data) {
+    final taskId = data['taskId'];
+    final acceptedBy = data['acceptedBy'];
+    if (taskId is! String || acceptedBy is! String) {
+      return;
+    }
+
+    final next = List<TaskModel>.from(_cachedTasks);
+    final index = next.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    next[index] = next[index].copyWith(
+      acceptedByUserId: acceptedBy,
+      acceptedAt: DateTime.now(),
+    );
+    _cachedTasks = next;
+    _state = ViewState<List<TaskModel>>.success(next);
+    notifyListeners();
   }
 
   Future<void> applySort(TaskSortType sortType) async {

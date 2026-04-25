@@ -65,6 +65,11 @@ class AuthService {
     }
   }
 
+  /// Public helper to obtain the current Firebase ID token if available.
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
+    return await _resolveIdToken(forceRefresh: forceRefresh);
+  }
+
   Future<UserModel?> getCurrentUser() async {
     final token = await _resolveIdToken();
     if (token == null) {

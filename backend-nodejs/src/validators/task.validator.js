@@ -31,8 +31,8 @@ function validateCreateTaskPayload(payload = {}) {
 		locationGeo,
 		scheduledAt: normalizeString(payload.scheduledAt),
 		executionMode: executionMode || 'offline',
-		postedByUserId: normalizeString(payload.postedByUserId) || 'u_1001',
-		postedByName: normalizeString(payload.postedByName) || 'Aarav Sharma',
+		postedByUserId: normalizeString(payload.postedByUserId),
+		postedByName: normalizeString(payload.postedByName),
 	};
 
 	const errors = [];
@@ -71,6 +71,10 @@ function validateCreateTaskPayload(payload = {}) {
 	}
 	if (value.executionMode !== 'online' && value.executionMode !== 'offline') {
 		errors.push({field: 'executionMode', message: 'executionMode must be online or offline.'});
+	}
+
+	if (!value.postedByUserId) {
+		errors.push({field: 'postedByUserId', message: 'postedByUserId is required.'});
 	}
 
 	return createValidationResult(errors.length === 0, value, errors);
