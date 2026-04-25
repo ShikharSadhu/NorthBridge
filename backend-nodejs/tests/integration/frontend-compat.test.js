@@ -102,19 +102,43 @@ describe('frontend compatibility contracts', () => {
 			method: 'POST',
 			path: '/v1/auth/login',
 			body: {
+				password: 'pass123',
 				name: 'Frontend User',
 				location: 'Noida',
 				email: 'frontend-user@northbridge.app',
 			},
-			headers: {'x-user-id': 'u_front_profile'},
 		});
-		expect(login.status).toBe(200);
+		if (login.status === 401) {
+			const signup = await handleApiRequest({
+				method: 'POST',
+				path: '/v1/auth/signup',
+				body: {
+					name: 'Frontend User',
+					location: 'Noida',
+					email: 'frontend-user@northbridge.app',
+					password: 'pass123',
+				},
+			});
+			expect(signup.status).toBe(201);
+		} else {
+			expect(login.status).toBe(200);
+		}
+
+		const authenticatedLogin = await handleApiRequest({
+			method: 'POST',
+			path: '/v1/auth/login',
+			body: {
+				email: 'frontend-user@northbridge.app',
+				password: 'pass123',
+			},
+		});
+		expect(authenticatedLogin.status).toBe(200);
 
 		const currentUser = await handleApiRequest({
 			method: 'GET',
 			path: '/v1/auth/me',
 			body: {},
-			headers: {'x-user-id': 'u_front_profile'},
+			headers: {'x-user-id': authenticatedLogin.body.user.id},
 		});
 		expect(currentUser.status).toBe(200);
 		expect(currentUser.body.user).toEqual(

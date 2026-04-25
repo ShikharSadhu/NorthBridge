@@ -89,6 +89,10 @@ class ChatProvider extends ChangeNotifier {
     String? imageDataUrl,
     bool isPaymentRequest = false,
   }) async {
+    if (_isSendingMessage) {
+      return;
+    }
+
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
       return;
@@ -107,10 +111,9 @@ class ChatProvider extends ChangeNotifier {
         isPaymentRequest: isPaymentRequest,
       );
 
-      final currentMessages =
-          List<MessageModel>.from(_messagesState.data ?? const []);
-      currentMessages.add(created);
-      _messagesState = ViewState<List<MessageModel>>.success(currentMessages);
+      _messagesState = ViewState<List<MessageModel>>.success(
+        _mergeMessages(_messagesState.data ?? const [], created),
+      );
 
       final chats = List<ChatModel>.from(_state.data ?? const []);
       final chatIndex = chats.indexWhere((chat) => chat.chatId == chatId);
@@ -161,19 +164,9 @@ class ChatProvider extends ChangeNotifier {
 
   void _upsertRealtimeMessage(MessageModel message) {
     if (_activeChatId == message.chatId) {
-      final currentMessages =
-          List<MessageModel>.from(_messagesState.data ?? const []);
-      final messageIndex =
-          currentMessages.indexWhere((item) => item.id == message.id);
-      if (messageIndex < 0) {
-        currentMessages.add(message);
-      } else {
-        currentMessages[messageIndex] = message;
-      }
-
-      currentMessages
-          .sort((left, right) => left.timestamp.compareTo(right.timestamp));
-      _messagesState = ViewState<List<MessageModel>>.success(currentMessages);
+      _messagesState = ViewState<List<MessageModel>>.success(
+        _mergeMessages(_messagesState.data ?? const [], message),
+      );
     }
 
     final chats = List<ChatModel>.from(_state.data ?? const []);
@@ -195,5 +188,21 @@ class ChatProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  List<MessageModel> _mergeMessages(
+    List<MessageModel> existing,
+    MessageModel incoming,
+  ) {
+    final next = List<MessageModel>.from(existing);
+    final messageIndex = next.indexWhere((item) => item.id == incoming.id);
+    if (messageIndex < 0) {
+      next.add(incoming);
+    } else {
+      next[messageIndex] = incoming;
+    }
+
+    next.sort((left, right) => left.timestamp.compareTo(right.timestamp));
+    return next;
   }
 }

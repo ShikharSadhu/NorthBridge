@@ -10,17 +10,33 @@ describe('integration api flows', () => {
 		expect(result.body).toHaveProperty('firestore');
 	});
 
-	test('auth login requires firebase-authenticated context', async () => {
-		const result = await handleApiRequest({
+	test('auth signup and login work with email and password', async () => {
+		const email = `api-flow-${Date.now()}@northbridge.app`;
+		const signupResult = await handleApiRequest({
 			method: 'POST',
-			path: '/v1/auth/login',
+			path: '/v1/auth/signup',
 			body: {
-				email: 'aarav@northbridge.app',
+				name: 'API Flow User',
+				location: 'Delhi',
+				email,
+				password: 'pass123',
 			},
 		});
 
-		expect(result.status).toBe(401);
-		expect(result.body).toHaveProperty('message', 'User is not authenticated.');
+		expect(signupResult.status).toBe(201);
+		expect(signupResult.body.user).toHaveProperty('email', email);
+
+		const loginResult = await handleApiRequest({
+			method: 'POST',
+			path: '/v1/auth/login',
+			body: {
+				email,
+				password: 'pass123',
+			},
+		});
+
+		expect(loginResult.status).toBe(200);
+		expect(loginResult.body.user).toHaveProperty('email', email);
 	});
 
 	test('auth me does not trust payload userId without authentication', async () => {

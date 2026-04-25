@@ -98,8 +98,8 @@ class TaskService {
     required double price,
     required DateTime scheduledAt,
     required TaskExecutionMode executionMode,
-    String postedByUserId = 'u_1001',
-    String postedByName = 'Aarav Sharma',
+    required String postedByUserId,
+    required String postedByName,
   }) async {
     final response = await _apiService.postJson(
       '/v1/tasks',

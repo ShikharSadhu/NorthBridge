@@ -1,158 +1,94 @@
-import 'dart:convert';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
 
 class AuthService {
-  AuthService({
-    ApiService? apiService,
-    FirebaseAuth? firebaseAuth,
-  })  : _apiService = apiService ?? ApiService(),
-        _injectedFirebaseAuth = firebaseAuth;
+  AuthService({ApiService? apiService})
+      : _apiService = apiService ?? ApiService();
 
   final ApiService _apiService;
-  final FirebaseAuth? _injectedFirebaseAuth;
-  FirebaseAuth? _firebaseAuth;
 
   static List<Map<String, dynamic>> _userStore = const [];
+  static String? _sessionUserId;
 
   UserModel? _currentUser;
 
-  void setSessionToken(String? idToken) {
-    ApiService.setGlobalAuthOverrideHeaders(null);
-    ApiService.setGlobalBearerToken(idToken);
+  void setSessionToken(String? _idToken) {
+    if (_idToken == null || _idToken.trim().isEmpty) {
+      clearSessionToken();
+    }
   }
 
   void clearSessionToken() {
+    _sessionUserId = null;
     ApiService.setGlobalBearerToken(null);
     ApiService.setGlobalAuthOverrideHeaders(null);
   }
 
-  Future<void> _ensureFirebaseInitialized() async {
-    if (Firebase.apps.isNotEmpty) {
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
+    final _ = forceRefresh;
+    return null;
+  }
+
+  String? getSessionUserId() {
+    final sessionUserId = _sessionUserId;
+    if (sessionUserId == null || sessionUserId.trim().isEmpty) {
+      return null;
+    }
+
+    return sessionUserId;
+  }
+
+  void _setSessionUser(UserModel user) {
+    _sessionUserId = user.id;
+    _currentUser = user;
+    ApiService.setGlobalBearerToken(null);
+    ApiService.setGlobalAuthOverrideHeaders({
+      'X-User-Id': user.id,
+      if (user.email.trim().isNotEmpty) 'X-User-Email': user.email.trim(),
+      if (user.name.trim().isNotEmpty) 'X-User-Name': user.name.trim(),
+    });
+    _upsertUserStore(user);
+  }
+
+  void _restoreSessionHeaders() {
+    final sessionUserId = _sessionUserId;
+    if (sessionUserId == null || sessionUserId.trim().isEmpty) {
+      ApiService.setGlobalAuthOverrideHeaders(null);
       return;
     }
 
-    await Firebase.initializeApp();
-  }
+    final matchingUser = _userStore.cast<Map<String, dynamic>?>().firstWhere(
+          (user) => user?['id'] == sessionUserId,
+          orElse: () => null,
+        );
 
-  Future<FirebaseAuth> _getFirebaseAuth() async {
-    if (_injectedFirebaseAuth != null) {
-      return _injectedFirebaseAuth!;
-    }
-
-    await _ensureFirebaseInitialized();
-    _firebaseAuth ??= FirebaseAuth.instance;
-    return _firebaseAuth!;
-  }
-
-  Future<String?> _resolveIdToken({bool forceRefresh = false}) async {
-    try {
-      final firebaseAuth = await _getFirebaseAuth();
-      final user = firebaseAuth.currentUser;
-      if (user == null) {
-        return null;
-      }
-
-      final token = await user.getIdToken(forceRefresh);
-      if (token == null || token.trim().isEmpty) {
-        return null;
-      }
-
-      return token;
-    } on FirebaseException {
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _devUserIdForEmail(String email) {
-    final normalized = email.trim().toLowerCase();
-    final encoded = base64Url.encode(utf8.encode(normalized)).replaceAll('=', '');
-    return 'dev_${encoded.length > 28 ? encoded.substring(0, 28) : encoded}';
-  }
-
-  void _setDevAuthOverride({
-    required String userId,
-    required String email,
-    String? name,
-  }) {
-    clearSessionToken();
+    ApiService.setGlobalBearerToken(null);
     ApiService.setGlobalAuthOverrideHeaders({
-      'X-User-Id': userId,
-      'X-User-Email': email.trim().toLowerCase(),
-      if (name != null && name.trim().isNotEmpty) 'X-User-Name': name.trim(),
+      'X-User-Id': sessionUserId,
+      if (matchingUser != null && matchingUser['email'] is String)
+        'X-User-Email': (matchingUser['email'] as String).trim(),
+      if (matchingUser != null && matchingUser['name'] is String)
+        'X-User-Name': (matchingUser['name'] as String).trim(),
     });
   }
 
-  bool _canUseDevAuthFallback(Object error) {
-    if (!kDebugMode) {
-      return false;
-    }
-
-    if (error is FirebaseException) {
-      final code = error.code.toLowerCase();
-      return code.contains('not-initialized') ||
-          code.contains('no-app') ||
-          code.contains('options') ||
-          code.contains('plugin');
-    }
-
-    final message = error.toString().toLowerCase();
-    return message.contains('firebase') &&
-        (message.contains('options') ||
-            message.contains('no firebase app') ||
-            message.contains('not been correctly initialized') ||
-            message.contains('default app'));
-  }
-
-  Future<UserModel> _signUpWithDevBackendOverride({
-    required String name,
-    required String location,
-    required String email,
-  }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final userId = _devUserIdForEmail(normalizedEmail);
-    _setDevAuthOverride(userId: userId, email: normalizedEmail, name: name);
-
-    final response = await _apiService.postJson(
-      '/v1/auth/signup',
-      body: {
-        'name': name.trim(),
-        'location': location.trim(),
-        'email': normalizedEmail,
-      },
-    );
-
-    final rawUser = response['user'];
-    if (rawUser is! Map) {
-      throw Exception('Invalid signup response.');
-    }
-
-    final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-    _currentUser = user;
-    _upsertUserStore(user);
-    return user;
-  }
-
-  /// Public helper to obtain the current Firebase ID token if available.
-  Future<String?> getIdToken({bool forceRefresh = false}) async {
-    return await _resolveIdToken(forceRefresh: forceRefresh);
-  }
-
   Future<UserModel?> getCurrentUser() async {
-    final token = await _resolveIdToken();
-    if (token == null) {
-      clearSessionToken();
+    if (_sessionUserId == null || _sessionUserId!.trim().isEmpty) {
       _currentUser = null;
       return null;
     }
 
-    setSessionToken(token);
+    final cachedUser = _userStore.cast<Map<String, dynamic>?>().firstWhere(
+          (user) => user?['id'] == _sessionUserId,
+          orElse: () => null,
+        );
+    if (cachedUser != null) {
+      final restoredUser = UserModel.fromJson(cachedUser);
+      _setSessionUser(restoredUser);
+      return restoredUser;
+    }
+
+    _restoreSessionHeaders();
 
     try {
       final response = await _apiService.getJson('/v1/auth/me');
@@ -163,14 +99,11 @@ class AuthService {
       }
 
       final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-      _currentUser = user;
-      _upsertUserStore(user);
+      _setSessionUser(user);
       return user;
     } on ApiException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 404) {
-        if (error.statusCode == 401) {
-          clearSessionToken();
-        }
+        clearSessionToken();
         _currentUser = null;
         return null;
       }
@@ -178,7 +111,6 @@ class AuthService {
       if (_currentUser != null) {
         return _currentUser;
       }
-
       rethrow;
     } catch (_) {
       if (_currentUser != null) {
@@ -226,87 +158,30 @@ class AuthService {
   }
 
   Future<UserModel?> signInSession({String? idToken}) async {
-    final resolvedToken =
-        (idToken != null && idToken.trim().isNotEmpty) ? idToken : await _resolveIdToken();
-    if (resolvedToken == null) {
-      clearSessionToken();
-      return null;
-    }
-
-    setSessionToken(resolvedToken);
-
-    try {
-      final response = await _apiService.postJson('/v1/auth/login');
-      final rawUser = response['user'];
-      if (rawUser is! Map) {
-        return null;
-      }
-
-      final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-      _currentUser = user;
-      _upsertUserStore(user);
-      return user;
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        clearSessionToken();
-      }
-      rethrow;
-    }
+    final _ = idToken;
+    return getCurrentUser();
   }
 
   Future<UserModel?> signInWithCredentials({
     required String email,
     required String password,
   }) async {
-    FirebaseAuth firebaseAuth;
-    try {
-      firebaseAuth = await _getFirebaseAuth();
-    } catch (error) {
-      if (_canUseDevAuthFallback(error)) {
-        _setDevAuthOverride(
-          userId: _devUserIdForEmail(email),
-          email: email,
-          name: email.split('@').first,
-        );
-        return await getCurrentUser();
-      }
-      rethrow;
-    }
-
-    final credential = await firebaseAuth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
+    final response = await _apiService.postJson(
+      '/v1/auth/login',
+      body: {
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
     );
 
-    final idToken = await credential.user?.getIdToken(true);
-    if (idToken == null || idToken.trim().isEmpty) {
-      clearSessionToken();
+    final rawUser = response['user'];
+    if (rawUser is! Map) {
       return null;
     }
 
-    setSessionToken(idToken);
-    try {
-      final response = await _apiService.postJson(
-        '/v1/auth/login',
-        body: {
-          'email': email.trim().toLowerCase(),
-        },
-      );
-      final rawUser = response['user'];
-      if (rawUser is! Map) {
-        return null;
-      }
-
-      final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-      _currentUser = user;
-      _upsertUserStore(user);
-      return user;
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        clearSessionToken();
-      }
-      rethrow;
-    }
+    final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
+    _setSessionUser(user);
+    return user;
   }
 
   Future<UserModel> signUpWithCredentials({
@@ -315,68 +190,30 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    FirebaseAuth firebaseAuth;
-    try {
-      firebaseAuth = await _getFirebaseAuth();
-    } catch (error) {
-      if (_canUseDevAuthFallback(error)) {
-        return _signUpWithDevBackendOverride(
-          name: name,
-          location: location,
-          email: email,
-        );
-      }
-      rethrow;
-    }
-
-    final credential = await firebaseAuth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
+    final response = await _apiService.postJson(
+      '/v1/auth/signup',
+      body: {
+        'name': name.trim(),
+        'location': location.trim(),
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      },
     );
 
-    if (name.trim().isNotEmpty) {
-      await credential.user?.updateDisplayName(name.trim());
+    final rawUser = response['user'];
+    if (rawUser is! Map) {
+      throw Exception('Invalid signup response.');
     }
 
-    final idToken = await credential.user?.getIdToken(true);
-    if (idToken == null || idToken.trim().isEmpty) {
-      throw Exception('Unable to obtain Firebase ID token.');
-    }
-
-    setSessionToken(idToken);
-    try {
-      final response = await _apiService.postJson(
-        '/v1/auth/signup',
-        body: {
-          'name': name.trim(),
-          'location': location.trim(),
-          'email': email.trim().toLowerCase(),
-        },
-      );
-
-      final rawUser = response['user'];
-      if (rawUser is! Map) {
-        throw Exception('Invalid signup response.');
-      }
-
-      final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-      _currentUser = user;
-      _upsertUserStore(user);
-      return user;
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        clearSessionToken();
-      }
-      rethrow;
-    }
+    final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
+    _setSessionUser(user);
+    return user;
   }
 
   Future<void> signOut() async {
-    final firebaseAuth = await _getFirebaseAuth();
     try {
       await _apiService.postJson('/v1/auth/logout');
     } finally {
-      await firebaseAuth.signOut();
       clearSessionToken();
       _currentUser = null;
     }
@@ -412,8 +249,7 @@ class AuthService {
     }
 
     final updated = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
-    _currentUser = updated;
-    _upsertUserStore(updated);
+    _setSessionUser(updated);
     return updated;
   }
 

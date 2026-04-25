@@ -1,14 +1,17 @@
 const {
 	listPublicUsers,
+	findUserByEmail,
 	getPublicUserById: getPublicUserByIdFromRepository,
 	getPrivateUserById: getPrivateUserByIdFromRepository,
+	createUser,
 	upsertUserFromAuth,
 	updateUserProfile: updateUserProfileInRepository,
 	submitRatingForUser: submitRatingForUserInRepository,
 } = require('../repositories/user.repository');
 const {
 	validateCurrentUserPayload,
-	validateFirebaseAuthPayload,
+	validateLoginPayload,
+	validateSignupPayload,
 	validateUpdateProfilePayload,
 } = require('../validators/auth.validator');
 const {success, failure} = require('../utils/response.util');
@@ -62,31 +65,46 @@ async function getPublicUserById(payload = {}) {
 }
 
 async function login(payload = {}) {
-	const validation = validateFirebaseAuthPayload(payload);
+	const validation = validateLoginPayload(payload);
 	if (!validation.valid) {
-		return failure(401, resolveAuthFailureMessage(payload));
+		return failure(400, 'Email and password are required.');
 	}
 
-	const upserted = await upsertUserFromAuth(validation.value);
-	if (!upserted.user) {
-		return failure(500, 'Failed to resolve authenticated user.');
+	const existingUser = await findUserByEmail(validation.value.email);
+	if (!existingUser) {
+		return failure(401, 'Invalid email or password.');
 	}
 
-	return success(200, {user: upserted.user, authProvider: 'firebase'});
+	if (existingUser.password !== validation.value.password) {
+		return failure(401, 'Invalid email or password.');
+	}
+
+	const privateUser = await getPrivateUserByIdFromRepository(existingUser.id);
+	if (!privateUser) {
+		return failure(404, 'User not found.');
+	}
+
+	return success(200, {user: privateUser, authProvider: 'local'});
 }
 
 async function signup(payload = {}) {
-	const validation = validateFirebaseAuthPayload(payload);
+	const validation = validateSignupPayload(payload);
 	if (!validation.valid) {
-		return failure(401, resolveAuthFailureMessage(payload));
+		return failure(400, 'Name, location, email, and password are required.');
 	}
 
-	const upserted = await upsertUserFromAuth(validation.value);
-	if (!upserted.user) {
-		return failure(500, 'Failed to resolve authenticated user.');
+	const existingUser = await findUserByEmail(validation.value.email);
+	if (existingUser) {
+		return failure(409, 'That email already has an account. Try logging in.');
 	}
 
-	return success(upserted.created ? 201 : 200, {user: upserted.user, authProvider: 'firebase'});
+	const createdUser = await createUser(validation.value);
+	const privateUser = await getPrivateUserByIdFromRepository(createdUser.id);
+	if (!privateUser) {
+		return failure(500, 'Failed to create user.');
+	}
+
+	return success(201, {user: privateUser, authProvider: 'local'});
 }
 
 async function updateUserProfile(payload = {}, authUserId = '') {

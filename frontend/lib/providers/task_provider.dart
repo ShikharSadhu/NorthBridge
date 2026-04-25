@@ -199,6 +199,8 @@ class TaskProvider extends ChangeNotifier {
     required double price,
     required DateTime scheduledAt,
     required TaskExecutionMode executionMode,
+    required String postedByUserId,
+    required String postedByName,
   }) async {
     _isCreating = true;
     notifyListeners();
@@ -211,6 +213,8 @@ class TaskProvider extends ChangeNotifier {
         price: price,
         scheduledAt: scheduledAt,
         executionMode: executionMode,
+        postedByUserId: postedByUserId,
+        postedByName: postedByName,
       );
 
       final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);

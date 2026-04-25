@@ -8,23 +8,55 @@ describe('auth.service', () => {
 		expect(Array.isArray(result.data)).toBe(true);
 	});
 
-	test('login succeeds with authenticated firebase context payload', async () => {
+	test('signup creates a user without requiring prior authentication', async () => {
+		const email = `signup-${Date.now()}@northbridge.app`;
+		const result = await authService.signup({
+			name: 'Aarav Sharma',
+			location: 'Delhi',
+			email,
+			password: 'pass123',
+		});
+
+		expect(result.ok).toBe(true);
+		expect(result.status).toBe(201);
+		expect(result.data).toHaveProperty('authProvider', 'local');
+		expect(result.data).toHaveProperty('user');
+		expect(result.data.user).toHaveProperty('email', email);
+	});
+
+	test('login succeeds with matching email and password', async () => {
+		const email = `login-${Date.now()}@northbridge.app`;
+		await authService.signup({
+			name: 'Aarav Sharma',
+			location: 'Delhi',
+			email,
+			password: 'pass123',
+		});
+
 		const result = await authService.login({
-			userId: 'u_1001',
-			authEmail: 'aarav@northbridge.app',
-			authName: 'Aarav Sharma',
+			email,
+			password: 'pass123',
 		});
 
 		expect(result.ok).toBe(true);
 		expect(result.status).toBe(200);
-		expect(result.data).toHaveProperty('authProvider', 'firebase');
+		expect(result.data).toHaveProperty('authProvider', 'local');
 		expect(result.data).toHaveProperty('user');
-		expect(result.data.user).toHaveProperty('id', 'u_1001');
+		expect(result.data.user).toHaveProperty('email', email);
 	});
 
-	test('login fails when firebase-authenticated context is missing', async () => {
+	test('login fails when email or password is wrong', async () => {
+		const email = `wrong-pass-${Date.now()}@northbridge.app`;
+		await authService.signup({
+			name: 'Aarav Sharma',
+			location: 'Delhi',
+			email,
+			password: 'pass123',
+		});
+
 		const result = await authService.login({
-			email: 'aarav@northbridge.app',
+			email,
+			password: 'not-the-password',
 		});
 
 		expect(result.ok).toBe(false);

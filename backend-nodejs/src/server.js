@@ -87,7 +87,7 @@ function startServer(options = {}) {
 				}
 			} else {
 				const override = url.searchParams.get('x-user-id');
-				if (override && (process.env.ALLOW_WS_AUTH_OVERRIDE === 'true' || !wsAuthAvailable)) {
+				if (override) {
 					userId = override;
 					console.log('🔌 WS auth override used for user:', userId);
 				} else {

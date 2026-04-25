@@ -1,5 +1,6 @@
 const {getRequiredFirestoreDb} = require('../config/firebase');
 const {toPublicUser, toPrivateUser, cloneAuthUser, normalizeString} = require('../models/user.model');
+const {buildPrefixedId} = require('../utils/id.util');
 
 function normalizeSkills(value) {
 	if (!Array.isArray(value)) {
@@ -151,6 +152,29 @@ async function upsertUserFromAuth(input = {}) {
 	};
 }
 
+async function createUser(input = {}) {
+	const normalizedEmail = normalizeString(input.email).toLowerCase();
+	const password = typeof input.password === 'string' ? input.password : '';
+	const created = normalizeUserRecord({
+		id: buildPrefixedId('u'),
+		name: normalizeString(input.name) || 'NorthBridge User',
+		bio: '',
+		rating: 0,
+		tasksDone: 0,
+		location: normalizeString(input.location),
+		phoneNumber: '',
+		email: normalizedEmail,
+		skills: [],
+		profileImageUrl: '',
+		privatePaymentQrDataUrl: '',
+		password,
+	});
+
+	const db = getRequiredFirestoreDb();
+	await db.collection('users').doc(created.id).set(created, {merge: false});
+	return cloneAuthUser(created);
+}
+
 async function updateUserProfile(userId, input = {}) {
 	const normalizedUserId = normalizeString(userId);
 	if (!normalizedUserId) {
@@ -229,6 +253,7 @@ module.exports = {
 	getAuthUserById,
 	getPublicUserById,
 	getPrivateUserById,
+	createUser,
 	upsertUserFromAuth,
 	updateUserProfile,
 	submitRatingForUser,

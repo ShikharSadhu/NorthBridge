@@ -4,6 +4,7 @@ import 'package:frontend/core/state/view_state.dart';
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
 import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/services/websocket_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthService? authService})
@@ -95,6 +96,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await _authService.signOut();
+      await WebSocketService.instance.disconnect();
       _state = ViewState<UserModel>.empty(message: 'Signed out.');
     } catch (_) {
       _state = ViewState<UserModel>.error('Unable to sign out right now.');
@@ -123,6 +125,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _state = ViewState<UserModel>.success(user);
+      await WebSocketService.instance.connect();
       return true;
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
@@ -162,6 +165,7 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
       _state = ViewState<UserModel>.success(user);
+      await WebSocketService.instance.connect();
       return true;
     } on ApiException catch (error) {
       if (error.statusCode == 401) {

@@ -44,7 +44,7 @@ Write-Host "Frontend: $frontendPath"
 Write-Host "API Base URL: $apiBaseUrl"
 Write-Host "Frontend target: $FrontendTarget"
 
-$backendCmd = "Set-Location '$backendPath'; npm run dev"
+$backendCmd = "Set-Location '$backendPath'; `$env:ALLOW_HTTP_AUTH_OVERRIDE='true'; `$env:ALLOW_WS_AUTH_OVERRIDE='true'; npm run dev"
 $frontendCmd = "Set-Location '$frontendPath'; flutter run -d $FrontendTarget --dart-define=NB_API_BASE_URL=$apiBaseUrl"
 
 Start-Process powershell -ArgumentList '-NoExit', '-Command', $backendCmd | Out-Null

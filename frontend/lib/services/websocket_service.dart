@@ -13,7 +13,9 @@ class WebSocketService {
   WebSocketChannel? _channel;
   final StreamController<dynamic> _messageController = StreamController.broadcast();
   Timer? _heartbeatTimer;
+  Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
+  bool _shouldReconnect = true;
 
   Stream<dynamic> get messages => _messageController.stream;
 
@@ -29,14 +31,32 @@ class WebSocketService {
 
     final auth = AuthService();
     final resolved = token ?? await auth.getIdToken();
+    final sessionUserId = auth.getSessionUserId();
+    final normalizedToken = resolved?.trim();
+
+    if ((normalizedToken == null || normalizedToken.isEmpty) &&
+        (sessionUserId == null || sessionUserId.isEmpty) &&
+        !override) {
+      _shouldReconnect = false;
+      return;
+    }
 
     final base = _defaultWsBase();
-    final shouldOverride = override || (resolved == null && kDebugMode);
-    final uri = (resolved != null && resolved.trim().isNotEmpty)
-      ? Uri.parse('$base/?token=${Uri.encodeComponent(resolved)}')
-      : (shouldOverride ? Uri.parse('$base/?x-user-id=dev') : Uri.parse(base));
+    final shouldOverride = override ||
+        ((normalizedToken == null || normalizedToken.isEmpty) &&
+            sessionUserId != null &&
+            sessionUserId.isNotEmpty) ||
+        ((normalizedToken == null || normalizedToken.isEmpty) && kDebugMode);
+    final uri = (normalizedToken != null && normalizedToken.isNotEmpty)
+        ? Uri.parse('$base/?token=${Uri.encodeComponent(normalizedToken)}')
+        : (shouldOverride
+            ? Uri.parse(
+                '$base/?x-user-id=${Uri.encodeComponent(sessionUserId ?? 'dev')}',
+              )
+            : Uri.parse(base));
 
     try {
+      _shouldReconnect = true;
       _channel = WebSocketChannel.connect(uri);
       _reconnectAttempts = 0;
 
@@ -80,15 +100,20 @@ class WebSocketService {
   void _cleanupChannel() {
     try {
       _heartbeatTimer?.cancel();
+      _reconnectTimer?.cancel();
       _channel?.sink.close();
     } catch (_) {}
     _channel = null;
   }
 
   void _attemptReconnect() {
+    if (!_shouldReconnect) {
+      return;
+    }
+
     _reconnectAttempts = math.min(6, _reconnectAttempts + 1);
     final wait = math.min(60, math.pow(2, _reconnectAttempts)).toInt();
-    Timer(Duration(seconds: wait), () => connect());
+    _reconnectTimer = Timer(Duration(seconds: wait), () => connect());
   }
 
   Future<void> send(String type, dynamic data) async {
@@ -98,7 +123,9 @@ class WebSocketService {
   }
 
   Future<void> disconnect() async {
+    _shouldReconnect = false;
     _heartbeatTimer?.cancel();
+    _reconnectTimer?.cancel();
     try {
       await _channel?.sink.close();
     } catch (_) {}

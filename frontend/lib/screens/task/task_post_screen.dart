@@ -127,6 +127,14 @@ class _TaskPostScreenState extends State<TaskPostScreen> {
       _formError = null;
     });
 
+    final currentUser = widget.authProvider.state.data;
+    if (currentUser == null) {
+      setState(() {
+        _formError = 'Please login first to create a task.';
+      });
+      return;
+    }
+
     final created = await widget.taskProvider.createTask(
       title: title,
       description: description,
@@ -134,6 +142,8 @@ class _TaskPostScreenState extends State<TaskPostScreen> {
       price: price,
       scheduledAt: _selectedDateTime,
       executionMode: _selectedExecutionMode,
+      postedByUserId: currentUser.id,
+      postedByName: currentUser.name,
     );
 
     if (!mounted) {

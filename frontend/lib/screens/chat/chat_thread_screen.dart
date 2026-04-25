@@ -36,6 +36,7 @@ class ChatThreadScreen extends StatefulWidget {
 
 class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final TextEditingController _messageController = TextEditingController();
+  bool _isSendingLocally = false;
 
   String get _currentUserId {
     return widget.authProvider.state.data?.id ??
@@ -65,18 +66,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   Future<void> _send() async {
+    if (_isSendingLocally || widget.chatProvider.isSendingMessage) {
+      return;
+    }
+
     final text = _messageController.text.trim();
     if (text.isEmpty) {
       return;
     }
 
     _messageController.clear();
-    await widget.chatProvider.sendMessage(
-      chatId: widget.chat.chatId,
-      taskId: widget.chat.taskId,
-      senderId: _currentUserId.isNotEmpty ? _currentUserId : _fallbackSenderId,
-      text: text,
-    );
+    setState(() {
+      _isSendingLocally = true;
+    });
+
+    try {
+      await widget.chatProvider.sendMessage(
+        chatId: widget.chat.chatId,
+        taskId: widget.chat.taskId,
+        senderId: _currentUserId.isNotEmpty ? _currentUserId : _fallbackSenderId,
+        text: text,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingLocally = false;
+        });
+      } else {
+        _isSendingLocally = false;
+      }
+    }
   }
 
   Uint8List? _decodeDataUrl(String? dataUrl) {
@@ -700,11 +719,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             ),
                             const SizedBox(width: AppSpacing.xxs),
                             FilledButton(
-                              onPressed: widget.chatProvider.isSendingMessage
+                              onPressed: widget.chatProvider.isSendingMessage ||
+                                      _isSendingLocally
                                   ? null
                                   : _send,
                               child: Text(
-                                widget.chatProvider.isSendingMessage
+                                widget.chatProvider.isSendingMessage ||
+                                        _isSendingLocally
                                     ? '...'
                                     : 'Send',
                               ),

@@ -163,7 +163,7 @@ function applyCorsHeaders(req, res) {
 	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
 	res.setHeader(
 		'Access-Control-Allow-Headers',
-		'Content-Type, Authorization, X-Requested-With',
+		'Content-Type, Authorization, X-Requested-With, X-User-Id, X-User-Email, X-User-Name, X-Request-Id',
 	);
 
 	if (envConfig.corsAllowCredentials) {
