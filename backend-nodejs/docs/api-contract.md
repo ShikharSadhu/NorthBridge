@@ -99,7 +99,7 @@ The backend verifies tokens with Firebase Admin and exposes this auth context to
 
 Client-provided user IDs in request bodies are not trusted when Firebase auth is present. If an authenticated token user conflicts with a body actor field, the controller returns `403`.
 
-Local tests may mock auth context. WebSocket `x-user-id` query override exists only when `ALLOW_WS_AUTH_OVERRIDE=true`; production clients should always use Firebase ID tokens.
+Local tests may mock auth context. WebSocket `x-user-id` query override exists only when `ALLOW_WS_AUTH_OVERRIDE=true`. HTTP `X-User-Id` override exists for local development only when `ALLOW_HTTP_AUTH_OVERRIDE=true`, or outside production when Firebase Admin cannot initialize. Production clients should always use Firebase ID tokens.
 
 ## Real-Time Events
 

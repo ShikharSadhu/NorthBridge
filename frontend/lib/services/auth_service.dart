@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
 
@@ -19,11 +22,13 @@ class AuthService {
   UserModel? _currentUser;
 
   void setSessionToken(String? idToken) {
+    ApiService.setGlobalAuthOverrideHeaders(null);
     ApiService.setGlobalBearerToken(idToken);
   }
 
   void clearSessionToken() {
     ApiService.setGlobalBearerToken(null);
+    ApiService.setGlobalAuthOverrideHeaders(null);
   }
 
   Future<void> _ensureFirebaseInitialized() async {
@@ -63,6 +68,75 @@ class AuthService {
     } catch (_) {
       return null;
     }
+  }
+
+  String _devUserIdForEmail(String email) {
+    final normalized = email.trim().toLowerCase();
+    final encoded = base64Url.encode(utf8.encode(normalized)).replaceAll('=', '');
+    return 'dev_${encoded.length > 28 ? encoded.substring(0, 28) : encoded}';
+  }
+
+  void _setDevAuthOverride({
+    required String userId,
+    required String email,
+    String? name,
+  }) {
+    clearSessionToken();
+    ApiService.setGlobalAuthOverrideHeaders({
+      'X-User-Id': userId,
+      'X-User-Email': email.trim().toLowerCase(),
+      if (name != null && name.trim().isNotEmpty) 'X-User-Name': name.trim(),
+    });
+  }
+
+  bool _canUseDevAuthFallback(Object error) {
+    if (!kDebugMode) {
+      return false;
+    }
+
+    if (error is FirebaseException) {
+      final code = error.code.toLowerCase();
+      return code.contains('not-initialized') ||
+          code.contains('no-app') ||
+          code.contains('options') ||
+          code.contains('plugin');
+    }
+
+    final message = error.toString().toLowerCase();
+    return message.contains('firebase') &&
+        (message.contains('options') ||
+            message.contains('no firebase app') ||
+            message.contains('not been correctly initialized') ||
+            message.contains('default app'));
+  }
+
+  Future<UserModel> _signUpWithDevBackendOverride({
+    required String name,
+    required String location,
+    required String email,
+  }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final userId = _devUserIdForEmail(normalizedEmail);
+    _setDevAuthOverride(userId: userId, email: normalizedEmail, name: name);
+
+    final response = await _apiService.postJson(
+      '/v1/auth/signup',
+      body: {
+        'name': name.trim(),
+        'location': location.trim(),
+        'email': normalizedEmail,
+      },
+    );
+
+    final rawUser = response['user'];
+    if (rawUser is! Map) {
+      throw Exception('Invalid signup response.');
+    }
+
+    final user = UserModel.fromJson(Map<String, dynamic>.from(rawUser));
+    _currentUser = user;
+    _upsertUserStore(user);
+    return user;
   }
 
   /// Public helper to obtain the current Firebase ID token if available.
@@ -184,7 +258,21 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final firebaseAuth = await _getFirebaseAuth();
+    FirebaseAuth firebaseAuth;
+    try {
+      firebaseAuth = await _getFirebaseAuth();
+    } catch (error) {
+      if (_canUseDevAuthFallback(error)) {
+        _setDevAuthOverride(
+          userId: _devUserIdForEmail(email),
+          email: email,
+          name: email.split('@').first,
+        );
+        return await getCurrentUser();
+      }
+      rethrow;
+    }
+
     final credential = await firebaseAuth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -227,7 +315,20 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final firebaseAuth = await _getFirebaseAuth();
+    FirebaseAuth firebaseAuth;
+    try {
+      firebaseAuth = await _getFirebaseAuth();
+    } catch (error) {
+      if (_canUseDevAuthFallback(error)) {
+        return _signUpWithDevBackendOverride(
+          name: name,
+          location: location,
+          email: email,
+        );
+      }
+      rethrow;
+    }
+
     final credential = await firebaseAuth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,

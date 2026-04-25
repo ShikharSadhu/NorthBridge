@@ -154,6 +154,29 @@ function extractBearerToken(input) {
 async function extractFirebaseAuthContext(input) {
 	const token = extractBearerToken(input);
 	if (!token) {
+		const headers = normalizeHeaders(resolveHeaders(input));
+		const overrideUserId = headers['x-user-id'];
+		const allowOverride =
+			process.env.ALLOW_HTTP_AUTH_OVERRIDE === 'true' ||
+			(process.env.NODE_ENV !== 'production' && !initializeFirebaseAuth());
+
+		if (allowOverride && typeof overrideUserId === 'string' && overrideUserId.trim()) {
+			return {
+				userId: overrideUserId.trim(),
+				email:
+					typeof headers['x-user-email'] === 'string'
+						? headers['x-user-email'].trim()
+						: undefined,
+				name:
+					typeof headers['x-user-name'] === 'string'
+						? headers['x-user-name'].trim()
+						: undefined,
+				tokenProvided: false,
+				authErrorCode: undefined,
+				authErrorMessage: undefined,
+			};
+		}
+
 		return {
 			userId: undefined,
 			email: undefined,

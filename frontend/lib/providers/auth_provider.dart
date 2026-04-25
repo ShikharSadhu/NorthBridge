@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/core/state/view_state.dart';
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
@@ -15,6 +16,23 @@ class AuthProvider extends ChangeNotifier {
   ViewState<UserModel> get state => _state;
   bool _isMutating = false;
   bool get isMutating => _isMutating;
+
+  String _firebaseAuthMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'email-already-in-use':
+        return 'That email already has an account. Try logging in.';
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      case 'weak-password':
+        return 'Use a stronger password.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-in is not enabled in Firebase.';
+      case 'network-request-failed':
+        return 'Unable to reach Firebase. Check your connection.';
+      default:
+        return error.message ?? 'Unable to sign up right now.';
+    }
+  }
 
   void setSessionToken(String? idToken) {
     _authService.setSessionToken(idToken);
@@ -113,8 +131,13 @@ class AuthProvider extends ChangeNotifier {
         _state = ViewState<UserModel>.error('Unable to sign in right now.');
       }
       return false;
-    } catch (_) {
-      _state = ViewState<UserModel>.error('Unable to sign in right now.');
+    } on FirebaseAuthException catch (error) {
+      _state = ViewState<UserModel>.error(_firebaseAuthMessage(error));
+      return false;
+    } catch (error) {
+      _state = ViewState<UserModel>.error(
+        kDebugMode ? error.toString() : 'Unable to sign in right now.',
+      );
       return false;
     } finally {
       _isMutating = false;
@@ -149,9 +172,12 @@ class AuthProvider extends ChangeNotifier {
         );
       }
       return false;
-    } catch (_) {
+    } on FirebaseAuthException catch (error) {
+      _state = ViewState<UserModel>.error(_firebaseAuthMessage(error));
+      return false;
+    } catch (error) {
       _state = ViewState<UserModel>.error(
-        'Unable to sign up. Try another email.',
+        kDebugMode ? error.toString() : 'Unable to sign up. Try another email.',
       );
       return false;
     } finally {

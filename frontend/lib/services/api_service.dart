@@ -80,12 +80,21 @@ class ApiService {
 	final Map<String, String> _defaultHeaders;
 
 	static String? _globalBearerToken;
+	static Map<String, String> _globalAuthOverrideHeaders = const {};
 	static ApiTelemetryHandler? _telemetryHandler;
 
 	static void setGlobalBearerToken(String? token) {
 		final normalized = token?.trim();
 		_globalBearerToken =
 				(normalized == null || normalized.isEmpty) ? null : normalized;
+	}
+
+	static void setGlobalAuthOverrideHeaders(Map<String, String>? headers) {
+		_globalAuthOverrideHeaders = headers == null
+				? const {}
+				: Map<String, String>.fromEntries(
+						headers.entries.where((entry) => entry.value.trim().isNotEmpty),
+					);
 	}
 
 	static void setTelemetryHandler(ApiTelemetryHandler? handler) {
@@ -153,6 +162,7 @@ class ApiService {
 		final uri = _buildUri(path, queryParameters);
 		final resolvedHeaders = {
 			..._defaultHeaders,
+			..._globalAuthOverrideHeaders,
 			...?headers,
 		};
 		final resolvedBearerToken =

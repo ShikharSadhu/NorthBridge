@@ -7,5 +7,6 @@
 - Actor rule: when `auth.userId` exists, body actor fields must either be omitted or match it; mismatches return `403`.
 - Error rule: missing auth returns `401`; invalid/expired/revoked tokens return `401` with a stable message.
 - Local tests: tests may mock `getAuthContext`; WebSocket `?x-user-id=<id>` is only allowed when `ALLOW_WS_AUTH_OVERRIDE=true`.
+- Local app development: HTTP `X-User-Id`, `X-User-Email`, and `X-User-Name` are accepted only when `ALLOW_HTTP_AUTH_OVERRIDE=true`, or outside production when Firebase Admin cannot initialize. This is for local development without Firebase client config.
 
 Do not send Firebase ID tokens in request bodies. Use the HTTP header or WebSocket query token only.
