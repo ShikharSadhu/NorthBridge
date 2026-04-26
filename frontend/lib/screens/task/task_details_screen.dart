@@ -183,14 +183,19 @@ class TaskDetailsScreen extends StatelessWidget {
                                 label: 'Your task',
                                 onPressed: null,
                               )
-                            else if (task.acceptedByUserId == userId)
+                            else if (task.acceptedByUserId == userId ||
+                                task.pendingAcceptanceByUserId == userId)
                               Row(
                                 children: [
                                   Expanded(
                                     child: FilledButton.tonalIcon(
                                       onPressed: null,
                                       icon: const Icon(Icons.check_circle),
-                                      label: const Text('Accepted'),
+                                      label: Text(
+                                        task.acceptedByUserId == userId
+                                            ? 'Accepted'
+                                            : 'Requested',
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: AppSpacing.xs),
@@ -211,6 +216,11 @@ class TaskDetailsScreen extends StatelessWidget {
                                 label: 'Accepted',
                                 onPressed: null,
                               )
+                            else if (task.pendingAcceptanceByUserId != null)
+                              AppButton(
+                                label: 'Acceptance pending',
+                                onPressed: null,
+                              )
                             else
                               AppButton(
                                 label: 'Accept task',
@@ -228,6 +238,10 @@ class TaskDetailsScreen extends StatelessWidget {
                                   switch (outcome) {
                                     case AcceptTaskOutcome.accepted:
                                       message = 'Task accepted.';
+                                      break;
+                                    case AcceptTaskOutcome.pendingApproval:
+                                      message =
+                                          'Acceptance request sent. Wait for the task giver in chat.';
                                       break;
                                     case AcceptTaskOutcome.ownTask:
                                       message =

@@ -25,9 +25,58 @@ async function notifyTaskAccepted(task) {
             type: 'TASK_ACCEPTED',
             data: {taskId: task.id, acceptedBy: task.acceptedByUserId},
         });
+        if (task.acceptedByUserId) {
+            websocketService.sendToUser(task.acceptedByUserId, {
+                type: 'TASK_ACCEPTED',
+                data: {taskId: task.id, acceptedBy: task.acceptedByUserId},
+            });
+        }
         safeFire(notificationService.notifyUser(task.postedByUserId, {type: 'TASK_ACCEPTED', data: {taskId: task.id}}));
     } catch (e) {
         console.warn('notifyTaskAccepted error', e && e.message);
+    }
+}
+
+async function notifyTaskAcceptanceRequested(task) {
+    try {
+        const data = {
+            taskId: task.id,
+            pendingAcceptanceBy: task.pendingAcceptanceByUserId,
+            pendingAcceptanceAt: task.pendingAcceptanceAt,
+        };
+        websocketService.sendToUser(task.postedByUserId, {
+            type: 'TASK_ACCEPTANCE_REQUESTED',
+            data,
+        });
+        if (task.pendingAcceptanceByUserId) {
+            websocketService.sendToUser(task.pendingAcceptanceByUserId, {
+                type: 'TASK_ACCEPTANCE_REQUESTED',
+                data,
+            });
+        }
+    } catch (e) {
+        console.warn('notifyTaskAcceptanceRequested error', e && e.message);
+    }
+}
+
+async function notifyTaskAcceptanceDeclined(task, declinedHelperUserId) {
+    try {
+        const data = {
+            taskId: task.id,
+            declinedHelperUserId,
+        };
+        websocketService.sendToUser(task.postedByUserId, {
+            type: 'TASK_ACCEPTANCE_DECLINED',
+            data,
+        });
+        if (declinedHelperUserId) {
+            websocketService.sendToUser(declinedHelperUserId, {
+                type: 'TASK_ACCEPTANCE_DECLINED',
+                data,
+            });
+        }
+    } catch (e) {
+        console.warn('notifyTaskAcceptanceDeclined error', e && e.message);
     }
 }
 
@@ -112,6 +161,8 @@ async function notifyReportUpdated(report) {
 module.exports = {
     notifyTaskCreated,
     notifyTaskAccepted,
+    notifyTaskAcceptanceRequested,
+    notifyTaskAcceptanceDeclined,
     notifyTaskCompleted,
     notifyTaskCompletionRequested,
     notifyTaskCompletionDeclined,

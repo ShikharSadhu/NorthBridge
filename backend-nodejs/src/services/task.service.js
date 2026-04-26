@@ -2,13 +2,22 @@ const {
 	listTasks,
 	getTaskById,
 	createTask,
-	acceptTask,
+	requestTaskAcceptance,
+	confirmTaskAcceptance,
+	declineTaskAcceptance,
 	requestTaskCompletion,
 	confirmTaskCompletion,
 	declineTaskCompletion,
 	submitTaskRating,
 	cancelTask,
 } = require('../repositories/task.repository');
+const {
+	getChatByTaskAndUsers,
+	createChat,
+	updateChat,
+	updateChatLastMessage,
+} = require('../repositories/chat.repository');
+const {createMessage} = require('../repositories/message.repository');
 const {
 	validateCreateTaskPayload,
 	validateAcceptTaskPayload,
@@ -229,6 +238,35 @@ async function createTaskEntry(payload = {}) {
 	return success(201, task);
 }
 
+async function ensureAcceptanceChat(task, helperUserId) {
+	const existingChat = await getChatByTaskAndUsers(task.id, task.postedByUserId, helperUserId);
+	if (existingChat?.isClosed) {
+		return {chat: existingChat, blocked: true};
+	}
+
+	if (existingChat) {
+		return {chat: existingChat, blocked: false};
+	}
+
+	const chat = await createChat({
+		taskId: task.id,
+		taskTitle: task.title,
+		taskOwnerUserId: task.postedByUserId,
+		taskOwnerName: task.postedByName,
+		users: [task.postedByUserId, helperUserId],
+		isClosed: false,
+		lastMessage: {
+			id: '',
+			chatId: '',
+			taskId: task.id,
+			senderId: task.postedByUserId,
+			text: '',
+			timestamp: new Date().toISOString(),
+		},
+	});
+	return {chat, blocked: false};
+}
+
 async function acceptTaskEntry(taskId, payload = {}) {
 	const task = await getTaskById(taskId);
 	if (!task) {
@@ -245,12 +283,99 @@ async function acceptTaskEntry(taskId, payload = {}) {
 	if (task.postedByUserId === validation.value.acceptedByUserId) {
 		return failure(400, 'You cannot accept your own task.');
 	}
-	if (task.acceptedByUserId && task.acceptedByUserId !== validation.value.acceptedByUserId) {
+	if (task.acceptedByUserId) {
+		if (task.acceptedByUserId === validation.value.acceptedByUserId) {
+			return failure(409, 'Task is already accepted by you.');
+		}
 		return failure(409, 'Task already accepted by another user.');
 	}
+	if (
+		task.pendingAcceptanceByUserId &&
+		task.pendingAcceptanceByUserId !== validation.value.acceptedByUserId
+	) {
+		return failure(409, 'Another acceptance request is already pending.');
+	}
 
-	const updatedTask = await acceptTask(taskId, validation.value.acceptedByUserId);
+	const chatResult = await ensureAcceptanceChat(task, validation.value.acceptedByUserId);
+	if (chatResult.blocked) {
+		return failure(409, 'Task owner already declined this chat request.');
+	}
+
+	const updatedTask = await requestTaskAcceptance(taskId, validation.value.acceptedByUserId);
+	const requestMessage = await createMessage({
+		chatId: chatResult.chat.chatId,
+		taskId: task.id,
+		senderId: validation.value.acceptedByUserId,
+		text: 'I would like to accept this task. Please accept or decline my request.',
+		timestamp: new Date().toISOString(),
+	});
+	const updatedChat = await updateChatLastMessage(chatResult.chat.chatId, requestMessage);
+	Promise.resolve(eventService.notifyNewMessage(updatedChat, requestMessage)).catch(() => {});
+	Promise.resolve(eventService.notifyTaskAcceptanceRequested(updatedTask)).catch(() => {});
+	return success(200, updatedTask);
+}
+
+async function confirmTaskAcceptanceEntry(taskId, payload = {}) {
+	const task = await getTaskById(taskId);
+	if (!task) {
+		return failure(404, 'Task not found.');
+	}
+
+	const validation = validateTaskOwnerPayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'ownerUserId is required.');
+	}
+	if (task.postedByUserId !== validation.value.ownerUserId) {
+		return failure(403, 'Only task owner can confirm acceptance.');
+	}
+	if (task.acceptedByUserId) {
+		return failure(409, 'Task is already accepted.');
+	}
+	if (!task.pendingAcceptanceByUserId) {
+		return failure(409, 'No pending acceptance request.');
+	}
+
+	const updatedTask = await confirmTaskAcceptance(taskId);
 	Promise.resolve(eventService.notifyTaskAccepted(updatedTask)).catch(() => {});
+	return success(200, updatedTask);
+}
+
+async function declineTaskAcceptanceEntry(taskId, payload = {}) {
+	const task = await getTaskById(taskId);
+	if (!task) {
+		return failure(404, 'Task not found.');
+	}
+
+	const validation = validateTaskOwnerPayload(payload);
+	if (!validation.valid) {
+		return failure(400, 'ownerUserId is required.');
+	}
+	if (task.postedByUserId !== validation.value.ownerUserId) {
+		return failure(403, 'Only task owner can decline acceptance.');
+	}
+	if (task.acceptedByUserId) {
+		return failure(409, 'Task is already accepted.');
+	}
+	if (!task.pendingAcceptanceByUserId) {
+		return failure(409, 'No pending acceptance request.');
+	}
+
+	const helperUserId = task.pendingAcceptanceByUserId;
+	const chat = await getChatByTaskAndUsers(task.id, task.postedByUserId, helperUserId);
+	const updatedTask = await declineTaskAcceptance(taskId);
+	if (chat) {
+		await updateChat(chat.chatId, {isClosed: true});
+		const declineMessage = await createMessage({
+			chatId: chat.chatId,
+			taskId: task.id,
+			senderId: task.postedByUserId,
+			text: 'Your acceptance request was declined. This chat is now closed.',
+			timestamp: new Date().toISOString(),
+		});
+		const finalChat = await updateChatLastMessage(chat.chatId, declineMessage);
+		Promise.resolve(eventService.notifyNewMessage(finalChat, declineMessage)).catch(() => {});
+	}
+	Promise.resolve(eventService.notifyTaskAcceptanceDeclined(updatedTask, helperUserId)).catch(() => {});
 	return success(200, updatedTask);
 }
 
@@ -385,6 +510,8 @@ module.exports = {
 	fetchTaskById,
 	createTaskEntry,
 	acceptTaskEntry,
+	confirmTaskAcceptanceEntry,
+	declineTaskAcceptanceEntry,
 	requestTaskCompletionEntry,
 	confirmTaskCompletionEntry,
 	declineTaskCompletionEntry,

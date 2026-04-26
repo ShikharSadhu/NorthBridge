@@ -1,7 +1,9 @@
 const {
 	acceptTaskController,
+	confirmTaskAcceptanceController,
 	confirmTaskCompletionController,
 	createTaskController,
+	declineTaskAcceptanceController,
 	declineTaskCompletionController,
 	completeTaskController,
 	cancelTaskController,
@@ -104,6 +106,22 @@ const taskRoutes = [
 			acceptTaskController(params.taskId, {
 				acceptedByUserId:
 					typeof body.acceptedByUserId === 'string' ? body.acceptedByUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/accept/confirm',
+		execute: (params, body, userId) =>
+			confirmTaskAcceptanceController(params.taskId, {
+				ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
+			}, userId),
+	},
+	{
+		method: 'POST',
+		path: '/v1/tasks/:taskId/accept/decline',
+		execute: (params, body, userId) =>
+			declineTaskAcceptanceController(params.taskId, {
+				ownerUserId: typeof body.ownerUserId === 'string' ? body.ownerUserId : undefined,
 			}, userId),
 	},
 	{

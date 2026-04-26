@@ -7,9 +7,20 @@ import 'package:frontend/services/task_service.dart';
 
 enum AcceptTaskOutcome {
   accepted,
+  pendingApproval,
   ownTask,
   alreadyAccepted,
   notFound,
+  failed,
+}
+
+enum TaskAcceptanceDecisionOutcome {
+  accepted,
+  declined,
+  notFound,
+  notTaskOwner,
+  noPendingRequest,
+  alreadyAccepted,
   failed,
 }
 
@@ -96,6 +107,12 @@ class TaskProvider extends ChangeNotifier {
       case 'TASK_CANCELLED':
         _upsertRealtimeTask(Map<String, dynamic>.from(data));
         return;
+      case 'TASK_ACCEPTANCE_REQUESTED':
+        _applyTaskAcceptanceRequested(Map<String, dynamic>.from(data));
+        return;
+      case 'TASK_ACCEPTANCE_DECLINED':
+        _applyTaskAcceptanceDeclined(Map<String, dynamic>.from(data));
+        return;
       case 'TASK_ACCEPTED':
         _applyTaskAccepted(Map<String, dynamic>.from(data));
         return;
@@ -181,7 +198,48 @@ class TaskProvider extends ChangeNotifier {
     next[index] = next[index].copyWith(
       acceptedByUserId: acceptedBy,
       acceptedAt: DateTime.now(),
+      clearPendingAcceptance: true,
     );
+    _cachedTasks = next;
+    _state = ViewState<List<TaskModel>>.success(next);
+    notifyListeners();
+  }
+
+  void _applyTaskAcceptanceRequested(Map<String, dynamic> data) {
+    final taskId = data['taskId'];
+    final pendingAcceptanceBy = data['pendingAcceptanceBy'];
+    if (taskId is! String || pendingAcceptanceBy is! String) {
+      return;
+    }
+
+    final next = List<TaskModel>.from(_cachedTasks);
+    final index = next.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    next[index] = next[index].copyWith(
+      pendingAcceptanceByUserId: pendingAcceptanceBy,
+      pendingAcceptanceAt: DateTime.now(),
+    );
+    _cachedTasks = next;
+    _state = ViewState<List<TaskModel>>.success(next);
+    notifyListeners();
+  }
+
+  void _applyTaskAcceptanceDeclined(Map<String, dynamic> data) {
+    final taskId = data['taskId'];
+    if (taskId is! String) {
+      return;
+    }
+
+    final next = List<TaskModel>.from(_cachedTasks);
+    final index = next.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    next[index] = next[index].copyWith(clearPendingAcceptance: true);
     _cachedTasks = next;
     _state = ViewState<List<TaskModel>>.success(next);
     notifyListeners();
@@ -255,6 +313,8 @@ class TaskProvider extends ChangeNotifier {
       switch (result) {
         case TaskAcceptResult.accepted:
           return AcceptTaskOutcome.accepted;
+        case TaskAcceptResult.pendingApproval:
+          return AcceptTaskOutcome.pendingApproval;
         case TaskAcceptResult.ownTask:
           return AcceptTaskOutcome.ownTask;
         case TaskAcceptResult.alreadyAccepted:
@@ -264,6 +324,80 @@ class TaskProvider extends ChangeNotifier {
       }
     } catch (_) {
       return AcceptTaskOutcome.failed;
+    }
+  }
+
+  Future<TaskAcceptanceDecisionOutcome> confirmTaskAcceptance({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final result = await _taskService.confirmTaskAcceptance(
+        taskId: taskId,
+        ownerUserId: ownerUserId,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskAcceptanceDecisionResult.accepted:
+          return TaskAcceptanceDecisionOutcome.accepted;
+        case TaskAcceptanceDecisionResult.declined:
+          return TaskAcceptanceDecisionOutcome.declined;
+        case TaskAcceptanceDecisionResult.notFound:
+          return TaskAcceptanceDecisionOutcome.notFound;
+        case TaskAcceptanceDecisionResult.notTaskOwner:
+          return TaskAcceptanceDecisionOutcome.notTaskOwner;
+        case TaskAcceptanceDecisionResult.noPendingRequest:
+          return TaskAcceptanceDecisionOutcome.noPendingRequest;
+        case TaskAcceptanceDecisionResult.alreadyAccepted:
+          return TaskAcceptanceDecisionOutcome.alreadyAccepted;
+      }
+    } catch (_) {
+      return TaskAcceptanceDecisionOutcome.failed;
+    }
+  }
+
+  Future<TaskAcceptanceDecisionOutcome> declineTaskAcceptance({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final result = await _taskService.declineTaskAcceptance(
+        taskId: taskId,
+        ownerUserId: ownerUserId,
+      );
+      final refreshed = await _taskService.fetchTasks(sortBy: _selectedSort);
+      _cachedTasks = refreshed;
+      _state = refreshed.isEmpty
+          ? ViewState<List<TaskModel>>.empty(
+              message: 'No tasks available right now.',
+            )
+          : ViewState<List<TaskModel>>.success(refreshed);
+      notifyListeners();
+
+      switch (result) {
+        case TaskAcceptanceDecisionResult.accepted:
+          return TaskAcceptanceDecisionOutcome.accepted;
+        case TaskAcceptanceDecisionResult.declined:
+          return TaskAcceptanceDecisionOutcome.declined;
+        case TaskAcceptanceDecisionResult.notFound:
+          return TaskAcceptanceDecisionOutcome.notFound;
+        case TaskAcceptanceDecisionResult.notTaskOwner:
+          return TaskAcceptanceDecisionOutcome.notTaskOwner;
+        case TaskAcceptanceDecisionResult.noPendingRequest:
+          return TaskAcceptanceDecisionOutcome.noPendingRequest;
+        case TaskAcceptanceDecisionResult.alreadyAccepted:
+          return TaskAcceptanceDecisionOutcome.alreadyAccepted;
+      }
+    } catch (_) {
+      return TaskAcceptanceDecisionOutcome.failed;
     }
   }
 

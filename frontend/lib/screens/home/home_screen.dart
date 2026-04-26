@@ -59,6 +59,10 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
+            final visibleTasks = taskProvider.tasks
+                .where((task) => task.isActive && task.acceptedByUserId == null)
+                .toList(growable: false);
+
             if (taskProvider.state.isEmpty) {
               return ListView(
                 padding: AppSpacing.screenPadding,
@@ -111,6 +115,57 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
+            if (visibleTasks.isEmpty) {
+              return ListView(
+                padding: AppSpacing.screenPadding,
+                children: [
+                  if (taskProvider.sortOptions.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: PopupMenuButton<TaskSortType>(
+                        onSelected: (sortType) {
+                          taskProvider.applySort(sortType);
+                        },
+                        itemBuilder: (context) => taskProvider.sortOptions
+                            .map(
+                              (option) => PopupMenuItem<TaskSortType>(
+                                value: option.type,
+                                child: Text(option.label),
+                              ),
+                            )
+                            .toList(growable: false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.sort, size: 18),
+                              const SizedBox(width: AppSpacing.xxs),
+                              Text(taskProvider.selectedSortLabel ?? 'Sort'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (taskProvider.sortOptions.isNotEmpty)
+                    const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'No open tasks available right now.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              );
+            }
+
             final hasTransientError = taskProvider.transientError != null;
             final hasSortControl = taskProvider.sortOptions.isNotEmpty;
             final headerItemsCount =
@@ -118,7 +173,7 @@ class HomeScreen extends StatelessWidget {
 
             return ListView.separated(
               padding: AppSpacing.screenPadding,
-              itemCount: taskProvider.tasks.length + headerItemsCount,
+              itemCount: visibleTasks.length + headerItemsCount,
               separatorBuilder: (_, __) =>
                   const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, index) {
@@ -182,7 +237,7 @@ class HomeScreen extends StatelessWidget {
                 }
 
                 final taskIndex = index - headerItemsCount;
-                final task = taskProvider.tasks[taskIndex];
+                final task = visibleTasks[taskIndex];
                 return TaskCard(
                   task: task,
                   onTap: () => AppRoutes.goToTaskDetails(

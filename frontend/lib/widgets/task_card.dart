@@ -36,7 +36,8 @@ class TaskCard extends StatelessWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
-                if (task.acceptedByUserId != null)
+                if (task.acceptedByUserId != null ||
+                    task.pendingAcceptanceByUserId != null)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
@@ -47,7 +48,7 @@ class TaskCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      'Accepted',
+                      task.acceptedByUserId != null ? 'Accepted' : 'Requested',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

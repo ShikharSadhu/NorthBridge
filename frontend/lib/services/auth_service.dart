@@ -78,16 +78,6 @@ class AuthService {
       return null;
     }
 
-    final cachedUser = _userStore.cast<Map<String, dynamic>?>().firstWhere(
-          (user) => user?['id'] == _sessionUserId,
-          orElse: () => null,
-        );
-    if (cachedUser != null) {
-      final restoredUser = UserModel.fromJson(cachedUser);
-      _setSessionUser(restoredUser);
-      return restoredUser;
-    }
-
     _restoreSessionHeaders();
 
     try {
@@ -102,10 +92,21 @@ class AuthService {
       _setSessionUser(user);
       return user;
     } on ApiException catch (error) {
+      final cachedUser = _userStore.cast<Map<String, dynamic>?>().firstWhere(
+            (user) => user?['id'] == _sessionUserId,
+            orElse: () => null,
+          );
+
       if (error.statusCode == 401 || error.statusCode == 404) {
         clearSessionToken();
         _currentUser = null;
         return null;
+      }
+
+      if (cachedUser != null) {
+        final restoredUser = UserModel.fromJson(cachedUser);
+        _setSessionUser(restoredUser);
+        return restoredUser;
       }
 
       if (_currentUser != null) {
@@ -113,6 +114,16 @@ class AuthService {
       }
       rethrow;
     } catch (_) {
+      final cachedUser = _userStore.cast<Map<String, dynamic>?>().firstWhere(
+            (user) => user?['id'] == _sessionUserId,
+            orElse: () => null,
+          );
+      if (cachedUser != null) {
+        final restoredUser = UserModel.fromJson(cachedUser);
+        _setSessionUser(restoredUser);
+        return restoredUser;
+      }
+
       if (_currentUser != null) {
         return _currentUser;
       }

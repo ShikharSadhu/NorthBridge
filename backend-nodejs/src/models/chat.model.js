@@ -31,6 +31,7 @@ function toChatRecord(chat) {
 		taskOwnerUserId: normalizeString(chat.taskOwnerUserId),
 		taskOwnerName: normalizeString(chat.taskOwnerName),
 		users: Array.isArray(chat.users) ? chat.users.filter((entry) => typeof entry === 'string') : [],
+		isClosed: Boolean(chat.isClosed),
 		lastMessage: toMessageRecord(chat.lastMessage) || createFallbackLastMessage(chat),
 	};
 }

@@ -35,6 +35,8 @@ function normalizeTaskRecord(record) {
 
 	const acceptedByUserId = normalizeString(record.acceptedByUserId) || undefined;
 	const acceptedAt = normalizeString(record.acceptedAt) || undefined;
+	const pendingAcceptanceByUserId = normalizeString(record.pendingAcceptanceByUserId) || undefined;
+	const pendingAcceptanceAt = normalizeString(record.pendingAcceptanceAt) || undefined;
 	const completionRequestedByUserId = normalizeString(record.completionRequestedByUserId) || undefined;
 	const completionRequestedAt = normalizeString(record.completionRequestedAt) || undefined;
 	const completedByUserId = normalizeString(record.completedByUserId) || undefined;
@@ -63,6 +65,8 @@ function normalizeTaskRecord(record) {
 		ratedAt,
 		acceptedByUserId,
 		acceptedAt,
+		pendingAcceptanceByUserId,
+		pendingAcceptanceAt,
 		status: normalizeString(record.status) || (acceptedByUserId ? 'accepted' : 'open'),
 	};
 }
@@ -151,6 +155,8 @@ async function createTask(input) {
 		status: 'open',
 		acceptedByUserId: undefined,
 		acceptedAt: undefined,
+		pendingAcceptanceByUserId: undefined,
+		pendingAcceptanceAt: undefined,
 	});
 
 	const db = getRequiredFirestoreDb();
@@ -177,7 +183,7 @@ async function updateTaskRecord(taskId, updates = {}) {
 	return upsertTaskCache({id: snapshot.id, ...snapshot.data(), ...updates});
 }
 
-async function acceptTask(taskId, acceptedByUserId) {
+async function requestTaskAcceptance(taskId, acceptedByUserId) {
 	const normalizedTaskId = normalizeString(taskId);
 	const acceptedBy = normalizeString(acceptedByUserId);
 	if (!normalizedTaskId) {
@@ -185,11 +191,38 @@ async function acceptTask(taskId, acceptedByUserId) {
 	}
 
 	const updates = {
-		status: 'accepted',
-		acceptedByUserId: acceptedBy,
-		acceptedAt: new Date().toISOString(),
+		status: 'pending_acceptance',
+		pendingAcceptanceByUserId: acceptedBy,
+		pendingAcceptanceAt: new Date().toISOString(),
 	};
 	return toTaskRecord(await updateTaskRecord(normalizedTaskId, updates));
+}
+
+async function confirmTaskAcceptance(taskId) {
+	const current = await getTaskRecordById(taskId);
+	if (!current) {
+		return null;
+	}
+
+	const updates = {
+		status: 'accepted',
+		acceptedByUserId: current.pendingAcceptanceByUserId || undefined,
+		acceptedAt: new Date().toISOString(),
+		pendingAcceptanceByUserId: null,
+		pendingAcceptanceAt: null,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
+}
+
+async function declineTaskAcceptance(taskId) {
+	const updates = {
+		status: 'open',
+		pendingAcceptanceByUserId: null,
+		pendingAcceptanceAt: null,
+	};
+
+	return toTaskRecord(await updateTaskRecord(taskId, updates));
 }
 
 async function requestTaskCompletion(taskId, helperUserId) {
@@ -215,6 +248,8 @@ async function confirmTaskCompletion(taskId) {
 		isRatingPending: true,
 		completionRequestedByUserId: null,
 		completionRequestedAt: null,
+		pendingAcceptanceByUserId: null,
+		pendingAcceptanceAt: null,
 	};
 
 	return toTaskRecord(await updateTaskRecord(taskId, updates));
@@ -252,6 +287,8 @@ async function cancelTask(taskId) {
 		completionRequestedByUserId: null,
 		completionRequestedAt: null,
 		isRatingPending: false,
+		pendingAcceptanceByUserId: null,
+		pendingAcceptanceAt: null,
 	};
 
 	return toTaskRecord(await updateTaskRecord(taskId, updates));
@@ -263,7 +300,9 @@ module.exports = {
 	getTaskRecordById,
 	nextTaskId,
 	createTask,
-	acceptTask,
+	requestTaskAcceptance,
+	confirmTaskAcceptance,
+	declineTaskAcceptance,
 	requestTaskCompletion,
 	confirmTaskCompletion,
 	declineTaskCompletion,

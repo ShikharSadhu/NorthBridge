@@ -15,6 +15,7 @@ function normalizeChatRecord(record) {
 		taskOwnerUserId: normalizeString(record.taskOwnerUserId),
 		taskOwnerName: normalizeString(record.taskOwnerName),
 		users: Array.isArray(record.users) ? record.users.filter((entry) => typeof entry === 'string') : [],
+		isClosed: Boolean(record.isClosed),
 		lastMessage: record.lastMessage ? toMessageRecord(record.lastMessage) : null,
 		updatedAt: normalizeString(record.updatedAt) || undefined,
 	};
@@ -116,6 +117,27 @@ async function updateChatLastMessage(chatId, message) {
 	return toChatRecord(normalizeChatRecord({chatId: snapshot.id, ...snapshot.data(), ...updates}));
 }
 
+async function updateChat(chatId, updates = {}) {
+	const normalizedChatId = normalizeString(chatId);
+	if (!normalizedChatId) {
+		return null;
+	}
+
+	const db = getRequiredFirestoreDb();
+	const ref = db.collection('chats').doc(normalizedChatId);
+	const snapshot = await ref.get();
+	if (!snapshot.exists) {
+		return null;
+	}
+
+	const payload = {
+		...updates,
+		updatedAt: new Date().toISOString(),
+	};
+	await ref.set(payload, {merge: true});
+	return toChatRecord(normalizeChatRecord({chatId: snapshot.id, ...snapshot.data(), ...payload}));
+}
+
 function nextChatId() {
 	return buildPrefixedId('c');
 }
@@ -128,6 +150,7 @@ async function createChat(input = {}) {
 		taskOwnerUserId: normalizeString(input.taskOwnerUserId),
 		taskOwnerName: normalizeString(input.taskOwnerName),
 		users: Array.isArray(input.users) ? input.users.filter((entry) => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean) : [],
+		isClosed: Boolean(input.isClosed),
 		lastMessage: normalizeMessageRecord(input.lastMessage),
 		updatedAt: new Date().toISOString(),
 	});
@@ -144,5 +167,6 @@ module.exports = {
 	getChatById,
 	getChatByTaskAndUsers,
 	createChat,
+	updateChat,
 	updateChatLastMessage,
 };

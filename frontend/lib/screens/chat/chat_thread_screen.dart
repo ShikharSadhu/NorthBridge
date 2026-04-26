@@ -100,6 +100,98 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  Future<void> _confirmTaskAcceptance() async {
+    final outcome = await widget.taskProvider.confirmTaskAcceptance(
+      taskId: widget.chat.taskId,
+      ownerUserId: _currentUserId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case TaskAcceptanceDecisionOutcome.accepted:
+        await widget.chatProvider.sendMessage(
+          chatId: widget.chat.chatId,
+          taskId: widget.chat.taskId,
+          senderId: _currentUserId,
+          text: 'Acceptance confirmed. You can start working on this task now.',
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.notFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.notTaskOwner:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only task owner can review acceptance.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.noPendingRequest:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pending acceptance request.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.alreadyAccepted:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task is already accepted.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.declined:
+      case TaskAcceptanceDecisionOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to confirm acceptance right now.')),
+        );
+        break;
+    }
+  }
+
+  Future<void> _declineTaskAcceptance() async {
+    final outcome = await widget.taskProvider.declineTaskAcceptance(
+      taskId: widget.chat.taskId,
+      ownerUserId: _currentUserId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case TaskAcceptanceDecisionOutcome.declined:
+        await widget.chatProvider.loadChats();
+        await widget.chatProvider.loadMessages(widget.chat.chatId);
+        break;
+      case TaskAcceptanceDecisionOutcome.notFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task not found.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.notTaskOwner:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only task owner can review acceptance.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.noPendingRequest:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pending acceptance request.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.alreadyAccepted:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task is already accepted.')),
+        );
+        break;
+      case TaskAcceptanceDecisionOutcome.accepted:
+      case TaskAcceptanceDecisionOutcome.failed:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to decline request right now.')),
+        );
+        break;
+    }
+  }
+
   Uint8List? _decodeDataUrl(String? dataUrl) {
     if (dataUrl == null || dataUrl.isEmpty) {
       return null;
@@ -393,6 +485,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
 
     if (updatedProfile && taskOutcome == SubmitRatingOutcome.rated) {
+      await widget.taskProvider.loadTasks();
+      await widget.authProvider.loadCurrentUser();
       await widget.chatProvider.sendMessage(
         chatId: widget.chat.chatId,
         taskId: widget.chat.taskId,
@@ -426,20 +520,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               ),
               builder: (context, _) {
                 final state = widget.chatProvider.messagesState;
+                final liveChats = widget.chatProvider.state.data ?? const [];
+                ChatModel activeChat = widget.chat;
+                for (final chat in liveChats) {
+                  if (chat.chatId == widget.chat.chatId) {
+                    activeChat = chat;
+                    break;
+                  }
+                }
                 final messages = state.data ?? const [];
                 final currentUserId = _currentUserId;
                 final matchingTasks = widget.taskProvider.tasks
-                  .where((item) => item.id == widget.chat.taskId)
-                  .toList(growable: false);
+                    .where((item) => item.id == widget.chat.taskId)
+                    .toList(growable: false);
                 final task = matchingTasks.isEmpty ? null : matchingTasks.first;
                 final isOwnTask = currentUserId == widget.chat.taskOwnerUserId;
-                final isAcceptedHelper = task != null &&
-                    task.acceptedByUserId == currentUserId &&
-                    currentUserId != widget.chat.taskOwnerUserId;
                 final counterpartUserId = widget.chat.users.firstWhere(
                   (id) => id != currentUserId,
                   orElse: () => widget.chat.taskOwnerUserId,
                 );
+                final isPendingHelper = task != null &&
+                    task.pendingAcceptanceByUserId == currentUserId &&
+                    currentUserId != widget.chat.taskOwnerUserId;
+                final canOwnerReviewAcceptance = task != null &&
+                    task.isActive &&
+                    isOwnTask &&
+                    task.pendingAcceptanceByUserId == counterpartUserId;
+                final isAcceptedHelper = task != null &&
+                    task.acceptedByUserId == currentUserId &&
+                    currentUserId != widget.chat.taskOwnerUserId;
                 final counterpartName =
                     counterpartUserId == widget.chat.taskOwnerUserId
                         ? widget.chat.taskOwnerName
@@ -506,6 +615,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         ),
                       ),
                     ),
+                    if (task != null &&
+                        task.isActive &&
+                        canOwnerReviewAcceptance) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      AppCard(
+                        child: Padding(
+                          padding: AppSpacing.cardPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'This user requested to accept the task.',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed: _confirmTaskAcceptance,
+                                      child: const Text('Accept'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: _declineTaskAcceptance,
+                                      child: const Text('Decline'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (task != null &&
+                        task.isActive &&
+                        isPendingHelper &&
+                        !activeChat.isClosed) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Acceptance request sent. Waiting for the task giver to accept or decline.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                     if (task != null && task.isActive && isAcceptedHelper) ...[
                       const SizedBox(height: AppSpacing.xs),
                       OutlinedButton.icon(
@@ -598,6 +756,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                     .toList(growable: false),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (activeChat.isClosed) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      AppCard(
+                        child: Padding(
+                          padding: AppSpacing.cardPadding,
+                          child: Text(
+                            'This chat has been closed by the task giver.',
+                            style: theme.textTheme.bodyMedium,
                           ),
                         ),
                       ),
@@ -716,15 +886,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                               child: TextField(
                                 controller: _messageController,
                                 textInputAction: TextInputAction.send,
+                                enabled: !activeChat.isClosed,
                                 onSubmitted: (_) => _send(),
-                                decoration: const InputDecoration(
-                                  hintText: 'Type a message',
+                                decoration: InputDecoration(
+                                  hintText: activeChat.isClosed
+                                      ? 'Chat closed'
+                                      : 'Type a message',
                                 ),
                               ),
                             ),
                             const SizedBox(width: AppSpacing.xs),
                             IconButton(
-                              onPressed: widget.chatProvider.isSendingMessage
+                              onPressed: widget.chatProvider.isSendingMessage ||
+                                      activeChat.isClosed
                                   ? null
                                   : _attachImage,
                               icon: const Icon(Icons.attach_file),
@@ -733,7 +907,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             const SizedBox(width: AppSpacing.xxs),
                             FilledButton(
                               onPressed: widget.chatProvider.isSendingMessage ||
-                                      _isSendingLocally
+                                      _isSendingLocally ||
+                                      activeChat.isClosed
                                   ? null
                                   : _send,
                               child: Text(
@@ -750,7 +925,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     const SizedBox(height: AppSpacing.xs),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: isOwnTask
+                      child: isOwnTask || !isAcceptedHelper || activeChat.isClosed
                           ? const SizedBox.shrink()
                           : OutlinedButton.icon(
                               onPressed: widget.chatProvider.isSendingMessage

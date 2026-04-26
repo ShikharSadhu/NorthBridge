@@ -83,6 +83,8 @@ class _NorthBridgeAppState extends State<NorthBridgeApp>
     }
 
     _initWebSocket();
+    _taskProvider.loadTasks();
+    _authProvider.loadCurrentUser();
     if ((_authProvider.state.data?.id ?? '').isNotEmpty) {
       _chatProvider.loadChats();
     }

@@ -163,7 +163,7 @@ function parsePositiveInt(value) {
 function validateTaskListPayload(payload = {}) {
 	const allowedSortBy = new Set(['default', 'distance', 'closestDate', 'latestDate', 'online', 'offline']);
 	const allowedExecutionMode = new Set(['online', 'offline']);
-	const allowedStatus = new Set(['open', 'accepted', 'completed', 'cancelled']);
+	const allowedStatus = new Set(['open', 'pending_acceptance', 'accepted', 'completed', 'cancelled']);
 
 	const sortByRaw = normalizeString(payload.sortBy);
 	const executionModeRaw = normalizeString(payload.executionMode).toLowerCase();

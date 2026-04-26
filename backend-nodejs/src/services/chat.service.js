@@ -4,6 +4,7 @@ const {
 	getChatById,
 	getChatByTaskAndUsers,
 	createChat,
+	updateChat,
 	updateChatLastMessage,
 } = require('../repositories/chat.repository');
 const {listMessagesByChatId, createMessage} = require('../repositories/message.repository');
@@ -105,6 +106,9 @@ async function createMessageEntry(payload = {}) {
 	if (!chat.users.includes(validation.value.senderId)) {
 		return failure(403, 'Only chat participants can send messages.');
 	}
+	if (chat.isClosed) {
+		return failure(409, 'This chat is closed.');
+	}
 	if (chat.taskId !== validation.value.taskId) {
 		return failure(400, 'taskId does not match chat task.');
 	}
@@ -151,6 +155,7 @@ async function openOrCreateTaskChatEntry(payload = {}) {
 		taskOwnerUserId: task.postedByUserId,
 		taskOwnerName: task.postedByName,
 		users: [task.postedByUserId, helperUserId],
+		isClosed: false,
 		lastMessage: {
 			id: '',
 			chatId: '',
@@ -165,7 +170,7 @@ async function openOrCreateTaskChatEntry(payload = {}) {
 		chatId: chat.chatId,
 		taskId: task.id,
 		senderId: task.postedByUserId,
-		text: "Task accepted. Let's coordinate the details.",
+		text: 'Started conversation about this task.',
 		timestamp: new Date().toISOString(),
 	});
 

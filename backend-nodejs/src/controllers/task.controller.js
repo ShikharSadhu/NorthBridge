@@ -181,6 +181,72 @@ async function acceptTaskController(taskId, payload = {}, authUserId = '') {
 		},
 	};
 }
+
+async function confirmTaskAcceptanceController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
+	const mergedPayload = {
+		...payload,
+		ownerUserId: actor.id,
+	};
+	const result = await taskService.confirmTaskAcceptanceEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
+
+async function declineTaskAcceptanceController(taskId, payload = {}, authUserId = '') {
+	const actor = resolveActorId(payload.ownerUserId, authUserId);
+	if (actor.error) {
+		return {
+			status: actor.error.status,
+			body: {
+				message: actor.error.message,
+			},
+		};
+	}
+
+	const mergedPayload = {
+		...payload,
+		ownerUserId: actor.id,
+	};
+	const result = await taskService.declineTaskAcceptanceEntry(taskId, mergedPayload);
+	if (!result.ok) {
+		return {
+			status: result.status,
+			body: {
+				message: result.message,
+			},
+		};
+	}
+
+	return {
+		status: result.status,
+		body: {
+			task: result.data,
+		},
+	};
+}
 async function requestTaskCompletionController(taskId, payload = {}, authUserId = '') {
 	const actor = resolveActorId(payload.helperUserId, authUserId);
 	if (actor.error) {
@@ -548,6 +614,8 @@ module.exports = {
 	getTaskController,
 	createTaskController,
 	acceptTaskController,
+	confirmTaskAcceptanceController,
+	declineTaskAcceptanceController,
 	requestTaskCompletionController,
 	confirmTaskCompletionController,
 	declineTaskCompletionController,

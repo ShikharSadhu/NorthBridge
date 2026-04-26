@@ -26,6 +26,8 @@ function toTaskRecord(task) {
 
 	const acceptedByUserId = normalizeString(task.acceptedByUserId) || undefined;
 	const acceptedAt = normalizeString(task.acceptedAt) || undefined;
+	const pendingAcceptanceByUserId = normalizeString(task.pendingAcceptanceByUserId) || undefined;
+	const pendingAcceptanceAt = normalizeString(task.pendingAcceptanceAt) || undefined;
 	const completionRequestedByUserId = normalizeString(task.completionRequestedByUserId) || undefined;
 	const completionRequestedAt = normalizeString(task.completionRequestedAt) || undefined;
 	const completedByUserId = normalizeString(task.completedByUserId) || undefined;
@@ -57,6 +59,8 @@ function toTaskRecord(task) {
 		ratedAt,
 		acceptedByUserId,
 		acceptedAt,
+		pendingAcceptanceByUserId,
+		pendingAcceptanceAt,
 		status: normalizeString(task.status) || (acceptedByUserId ? 'accepted' : 'open'),
 	};
 }

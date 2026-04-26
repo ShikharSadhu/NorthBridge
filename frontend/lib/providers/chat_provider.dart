@@ -153,6 +153,7 @@ class ChatProvider extends ChangeNotifier {
           taskOwnerUserId: current.taskOwnerUserId,
           taskOwnerName: current.taskOwnerName,
           users: current.users,
+          isClosed: current.isClosed,
           lastMessage: created,
         );
         _state = ViewState<List<ChatModel>>.success(chats);
@@ -213,6 +214,7 @@ class ChatProvider extends ChangeNotifier {
         taskOwnerUserId: current.taskOwnerUserId,
         taskOwnerName: current.taskOwnerName,
         users: current.users,
+        isClosed: current.isClosed,
         lastMessage: message,
       );
       _state = ViewState<List<ChatModel>>.success(chats);

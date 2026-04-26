@@ -8,6 +8,7 @@ class ChatModel {
     required this.taskOwnerUserId,
     required this.taskOwnerName,
     required this.users,
+    required this.isClosed,
     required this.lastMessage,
   });
 
@@ -17,6 +18,7 @@ class ChatModel {
   final String taskOwnerUserId;
   final String taskOwnerName;
   final List<String> users;
+  final bool isClosed;
   final MessageModel lastMessage;
 
   factory ChatModel.fromJson(Map<String, dynamic> json) {
@@ -27,6 +29,7 @@ class ChatModel {
       taskOwnerUserId: json['taskOwnerUserId'] as String,
       taskOwnerName: json['taskOwnerName'] as String,
       users: (json['users'] as List<dynamic>).cast<String>(),
+      isClosed: json['isClosed'] as bool? ?? false,
       lastMessage: MessageModel.fromJson(
         json['lastMessage'] as Map<String, dynamic>,
       ),
@@ -41,6 +44,7 @@ class ChatModel {
       'taskOwnerUserId': taskOwnerUserId,
       'taskOwnerName': taskOwnerName,
       'users': users,
+      'isClosed': isClosed,
       'lastMessage': lastMessage.toJson(),
     };
   }

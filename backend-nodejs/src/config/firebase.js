@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
+const admin = require('firebase-admin');
+const {initializeFirestore, getFirestore} = require('firebase-admin/firestore');
 const {getEnvConfig} = require('./env');
 
 let cachedClient = null;
@@ -573,8 +575,38 @@ function initializeFirebaseAdmin(env = getEnvConfig()) {
 		return cachedClient;
 	}
 
-	cachedClient = new FirestoreClient(env);
-	return cachedClient;
+	if (env.enableFirebaseEmulator && env.firestoreEmulatorHost) {
+		cachedClient = new FirestoreClient(env);
+		return cachedClient;
+	}
+
+	try {
+		let app = admin.apps[0];
+		if (!admin.apps.length) {
+			const options = {};
+			const serviceAccount = parseServiceAccountJson(env.firebaseCredentialsJson);
+			if (env.firebaseProjectId) {
+				options.projectId = env.firebaseProjectId;
+			}
+			if (serviceAccount) {
+				options.credential = admin.credential.cert(serviceAccount);
+			} else {
+				options.credential = admin.credential.applicationDefault();
+			}
+
+			app = admin.initializeApp(options);
+		}
+
+		cachedClient =
+			admin.apps.length > 1 || !app
+				? getFirestore(admin.apps[0])
+				: initializeFirestore(app, {preferRest: true});
+		return cachedClient;
+	} catch (_error) {
+		cachedClient = new FirestoreClient(env);
+		return cachedClient;
+	}
+
 }
 
 function getFirestoreDb(env = getEnvConfig()) {

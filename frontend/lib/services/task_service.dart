@@ -7,7 +7,17 @@ enum TaskAcceptResult {
   accepted,
   ownTask,
   alreadyAccepted,
+  pendingApproval,
   notFound,
+}
+
+enum TaskAcceptanceDecisionResult {
+  accepted,
+  declined,
+  notFound,
+  notTaskOwner,
+  noPendingRequest,
+  alreadyAccepted,
 }
 
 enum TaskCompletionRequestResult {
@@ -137,6 +147,10 @@ class TaskService {
         },
       );
       _upsertTaskCache(response['task']);
+      final task = response['task'];
+      if (task is Map && task['acceptedByUserId'] == null) {
+        return TaskAcceptResult.pendingApproval;
+      }
       return TaskAcceptResult.accepted;
     } on ApiException catch (error) {
       if (error.statusCode == 404) {
@@ -148,6 +162,70 @@ class TaskService {
       if (error.statusCode == 400 &&
           error.message.toLowerCase().contains('own task')) {
         return TaskAcceptResult.ownTask;
+      }
+      rethrow;
+    }
+  }
+
+  Future<TaskAcceptanceDecisionResult> confirmTaskAcceptance({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final response = await _apiService.postJson(
+        '/v1/tasks/$taskId/accept/confirm',
+        body: {
+          'ownerUserId': ownerUserId,
+        },
+      );
+      _upsertTaskCache(response['task']);
+      return TaskAcceptanceDecisionResult.accepted;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) {
+        return TaskAcceptanceDecisionResult.notFound;
+      }
+      if (error.statusCode == 403) {
+        return TaskAcceptanceDecisionResult.notTaskOwner;
+      }
+      if (error.statusCode == 409 &&
+          error.message.toLowerCase().contains('already accepted')) {
+        return TaskAcceptanceDecisionResult.alreadyAccepted;
+      }
+      if (error.statusCode == 409 &&
+          error.message.toLowerCase().contains('no pending acceptance')) {
+        return TaskAcceptanceDecisionResult.noPendingRequest;
+      }
+      rethrow;
+    }
+  }
+
+  Future<TaskAcceptanceDecisionResult> declineTaskAcceptance({
+    required String taskId,
+    required String ownerUserId,
+  }) async {
+    try {
+      final response = await _apiService.postJson(
+        '/v1/tasks/$taskId/accept/decline',
+        body: {
+          'ownerUserId': ownerUserId,
+        },
+      );
+      _upsertTaskCache(response['task']);
+      return TaskAcceptanceDecisionResult.declined;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) {
+        return TaskAcceptanceDecisionResult.notFound;
+      }
+      if (error.statusCode == 403) {
+        return TaskAcceptanceDecisionResult.notTaskOwner;
+      }
+      if (error.statusCode == 409 &&
+          error.message.toLowerCase().contains('already accepted')) {
+        return TaskAcceptanceDecisionResult.alreadyAccepted;
+      }
+      if (error.statusCode == 409 &&
+          error.message.toLowerCase().contains('no pending acceptance')) {
+        return TaskAcceptanceDecisionResult.noPendingRequest;
       }
       rethrow;
     }

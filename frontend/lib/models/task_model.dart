@@ -46,6 +46,8 @@ class TaskModel {
     this.ratedAt,
     this.acceptedByUserId,
     this.acceptedAt,
+    this.pendingAcceptanceByUserId,
+    this.pendingAcceptanceAt,
     this.locationGeo,
   });
 
@@ -69,6 +71,8 @@ class TaskModel {
   final DateTime? ratedAt;
   final String? acceptedByUserId;
   final DateTime? acceptedAt;
+  final String? pendingAcceptanceByUserId;
+  final DateTime? pendingAcceptanceAt;
   final TaskLocationGeo? locationGeo;
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -103,10 +107,16 @@ class TaskModel {
       acceptedAt: (json['acceptedAt'] as String?) == null
           ? null
           : DateTime.parse(json['acceptedAt'] as String),
-        locationGeo:
+      pendingAcceptanceByUserId: json['pendingAcceptanceByUserId'] as String?,
+      pendingAcceptanceAt: (json['pendingAcceptanceAt'] as String?) == null
+          ? null
+          : DateTime.parse(json['pendingAcceptanceAt'] as String),
+      locationGeo:
           json['locationGeo'] is Map<String, dynamic>
-            ? TaskLocationGeo.fromJson(json['locationGeo'] as Map<String, dynamic>)
-            : null,
+              ? TaskLocationGeo.fromJson(
+                  json['locationGeo'] as Map<String, dynamic>,
+                )
+              : null,
     );
   }
 
@@ -131,8 +141,11 @@ class TaskModel {
     DateTime? ratedAt,
     String? acceptedByUserId,
     DateTime? acceptedAt,
+    String? pendingAcceptanceByUserId,
+    DateTime? pendingAcceptanceAt,
     TaskLocationGeo? locationGeo,
     bool clearAcceptance = false,
+    bool clearPendingAcceptance = false,
     bool clearCompletionRequest = false,
   }) {
     return TaskModel(
@@ -161,6 +174,12 @@ class TaskModel {
       acceptedByUserId:
           clearAcceptance ? null : (acceptedByUserId ?? this.acceptedByUserId),
       acceptedAt: clearAcceptance ? null : (acceptedAt ?? this.acceptedAt),
+      pendingAcceptanceByUserId: clearPendingAcceptance
+          ? null
+          : (pendingAcceptanceByUserId ?? this.pendingAcceptanceByUserId),
+      pendingAcceptanceAt: clearPendingAcceptance
+          ? null
+          : (pendingAcceptanceAt ?? this.pendingAcceptanceAt),
       locationGeo: locationGeo ?? this.locationGeo,
     );
   }
@@ -187,6 +206,8 @@ class TaskModel {
       'ratedAt': ratedAt?.toIso8601String(),
       'acceptedByUserId': acceptedByUserId,
       'acceptedAt': acceptedAt?.toIso8601String(),
+      'pendingAcceptanceByUserId': pendingAcceptanceByUserId,
+      'pendingAcceptanceAt': pendingAcceptanceAt?.toIso8601String(),
       'locationGeo': locationGeo?.toJson(),
     };
   }
