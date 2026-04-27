@@ -1,3 +1,4 @@
+const cors = require('cors');
 const {handleApiRequest, listAvailableRoutes} = require('./routes');
 const {envConfig} = require('./config/env');
 const crypto = require('crypto');

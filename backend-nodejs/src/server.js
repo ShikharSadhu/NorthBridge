@@ -1,4 +1,5 @@
 const http = require('http');
+const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS_JSON);
 const WebSocket = require('ws');
 const websocketService = require('./services/websocket.service');
 const admin = require('firebase-admin');
@@ -10,8 +11,8 @@ const initializeFirebaseAuth =
 			  if (!admin.apps.length) {
 				  try {
 					  admin.initializeApp({
-						  credential: admin.credential.applicationDefault(),
-					  });
+  						credential: admin.credential.cert(serviceAccount),
+						});
 					  return true;
 				  } catch (_e) {
 					  return false;
@@ -44,11 +45,22 @@ function startServer(options = {}) {
 			: createAppHandler();
 
 	const server = http.createServer((req, res) => {
-		Promise.resolve(appHandler(req, res)).catch(() => {
-			res.statusCode = 500;
-			res.setHeader('Content-Type', 'application/json; charset=utf-8');
-			res.end(JSON.stringify({ message: 'Internal server error.' }));
-		});
+	// ✅ CORS HEADERS (REQUIRED FOR NETLIFY → RENDER)
+	res.setHeader('Access-Control-Allow-Origin', '*');
+	res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+	if (req.method === 'OPTIONS') {
+		res.writeHead(200);
+		res.end();
+		return;
+	}
+
+	Promise.resolve(appHandler(req, res)).catch(() => {
+		res.statusCode = 500;
+		res.setHeader('Content-Type', 'application/json; charset=utf-8');
+		res.end(JSON.stringify({ message: 'Internal server error.' }));
+	});
 	});
 
 	// 🔌 =========================
