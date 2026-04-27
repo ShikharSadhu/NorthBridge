@@ -76,6 +76,38 @@ function deriveTaskStatus(task) {
 	return 'open';
 }
 
+function matchesRequestedStatus(task, requestedStatus) {
+	const normalizedStatus =
+		typeof requestedStatus === 'string' ? requestedStatus.trim().toLowerCase() : '';
+	if (!normalizedStatus) {
+		return true;
+	}
+
+	if (normalizedStatus === 'open') {
+		return task?.isActive !== false && !task?.acceptedByUserId && task?.status !== 'cancelled';
+	}
+
+	return deriveTaskStatus(task) === normalizedStatus;
+}
+
+function shouldUseDirectQuery(distanceContext = {}) {
+	const normalizedStatus =
+		typeof distanceContext.status === 'string'
+			? distanceContext.status.trim().toLowerCase()
+			: '';
+	if (normalizedStatus === 'open') {
+		return false;
+	}
+
+	return Boolean(
+		normalizedStatus ||
+			distanceContext.executionMode ||
+			distanceContext.postedByUserId ||
+			distanceContext.acceptedByUserId ||
+			distanceContext.pageSize,
+	);
+}
+
 function filterTasks(tasks, payload = {}) {
 	let filtered = [...tasks];
 
@@ -86,7 +118,7 @@ function filterTasks(tasks, payload = {}) {
 
 	const status = typeof payload.status === 'string' ? payload.status.trim().toLowerCase() : '';
 	if (status) {
-		filtered = filtered.filter((task) => deriveTaskStatus(task) === status);
+		filtered = filtered.filter((task) => matchesRequestedStatus(task, status));
 	}
 
 	const minPrice = parseNumber(payload.minPrice);
@@ -252,14 +284,9 @@ function fetchTasks(payload = {}) {
 				: validation.value.viewerLocation,
 	};
 
-	const listOperation =
-		distanceContext.status ||
-		distanceContext.executionMode ||
-		distanceContext.postedByUserId ||
-		distanceContext.acceptedByUserId ||
-		distanceContext.pageSize
-			? listTasksByQuery(distanceContext)
-			: listTasks();
+	const listOperation = shouldUseDirectQuery(distanceContext)
+		? listTasksByQuery(distanceContext)
+		: listTasks();
 
 	return Promise.resolve(listOperation).then(async (tasks) => {
 		const withDistance = await applyAcceptorDistanceToList(tasks, distanceContext);

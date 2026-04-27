@@ -121,6 +121,40 @@ describe('task.service', () => {
 		expect(result.ok).toBe(true);
 		expect(result.status).toBe(200);
 		expect(result.data).toHaveLength(1);
-		expect(result.data[0].status).toBe('open');
+		expect(['open', 'pending_acceptance']).toContain(result.data[0].status);
+	});
+
+	test('fetchTasks keeps pending acceptance tasks in the open browse list until owner confirms', async () => {
+		const created = await taskService.createTaskEntry({
+			title: 'Pending browse visibility task',
+			description: 'Should remain visible while owner has not confirmed.',
+			location: 'Test City',
+			price: 80,
+			scheduledAt: new Date().toISOString(),
+			executionMode: 'offline',
+			postedByUserId: 'u_pending_owner',
+			postedByName: 'Pending Owner',
+		});
+
+		expect(created.ok).toBe(true);
+
+		const requested = await taskService.acceptTaskEntry(created.data.id, {
+			acceptedByUserId: 'u_pending_helper',
+		});
+
+		expect(requested.ok).toBe(true);
+		expect(requested.data.status).toBe('pending_acceptance');
+
+		const browseResult = await taskService.fetchTasks({
+			status: 'open',
+			page: 1,
+			pageSize: 25,
+		});
+
+		expect(browseResult.ok).toBe(true);
+		const taskInBrowse = browseResult.data.find((task) => task.id === created.data.id);
+		expect(taskInBrowse).toBeTruthy();
+		expect(taskInBrowse.acceptedByUserId).toBeUndefined();
+		expect(taskInBrowse.pendingAcceptanceByUserId).toBe('u_pending_helper');
 	});
 });

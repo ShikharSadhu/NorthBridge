@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants/app_spacing.dart';
 import 'package:frontend/models/task_sort_option_model.dart';
+import 'package:frontend/providers/auth_provider.dart';
 import 'package:frontend/providers/task_provider.dart';
 import 'package:frontend/routes/app_routes.dart';
 import 'package:frontend/widgets/app_button.dart';
@@ -11,12 +12,14 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.taskProvider,
+    required this.authProvider,
     this.showAppBar = true,
     this.showCreateShortcut = true,
   });
 
   static const String routeName = '/home';
   final TaskProvider taskProvider;
+  final AuthProvider authProvider;
   final bool showAppBar;
   final bool showCreateShortcut;
 
@@ -28,8 +31,9 @@ class HomeScreen extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
         child: AnimatedBuilder(
-          animation: taskProvider,
+          animation: Listenable.merge([taskProvider, authProvider]),
           builder: (context, _) {
+            final currentUserId = authProvider.state.data?.id;
             if (taskProvider.state.isLoading && !taskProvider.hasCachedData) {
               return ListView.separated(
                 padding: AppSpacing.screenPadding,
@@ -240,6 +244,7 @@ class HomeScreen extends StatelessWidget {
                 final task = visibleTasks[taskIndex];
                 return TaskCard(
                   task: task,
+                  currentUserId: currentUserId,
                   onTap: () => AppRoutes.goToTaskDetails(
                     context,
                     taskId: task.id,

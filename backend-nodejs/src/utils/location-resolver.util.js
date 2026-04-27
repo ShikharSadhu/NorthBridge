@@ -26,6 +26,21 @@ const KNOWN_LOCATIONS = [
 		aliases: ['delhi', 'new delhi', 'delhi ncr'],
 		point: {lat: 28.6139, lng: 77.209},
 	},
+	{
+		name: 'karol bagh',
+		aliases: ['Karol Bagh', 'Karol bagh new delhi', 'Karol bagh delhi ncr'],
+		point: {lat: 28.6531, lng: 77.18903},
+	},
+	{
+		name: 'shakti nagar',
+		aliases: ['Shakti Nagar', 'shakti nagar new delhi', 'shakti nagar delhi'],
+		point: {lat: 28.679500, lng: 77.194705},
+	},
+	{
+		name: 'ashok vihar',
+		aliases: ['Ashok Vihar', 'ashok vihar new delhi', 'ashok vihar delhi'],
+		point: {lat: 28.688510, lng: 77.175318},
+	},
 ];
 
 function normalizeLocationText(value) {

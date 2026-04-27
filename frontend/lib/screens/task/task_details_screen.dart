@@ -183,8 +183,9 @@ class TaskDetailsScreen extends StatelessWidget {
                                 label: 'Your task',
                                 onPressed: null,
                               )
-                            else if (task.acceptedByUserId == userId ||
-                                task.pendingAcceptanceByUserId == userId)
+                            else if (userId != null &&
+                                (task.acceptedByUserId == userId ||
+                                    task.pendingAcceptanceByUserId == userId))
                               Row(
                                 children: [
                                   Expanded(
@@ -216,7 +217,8 @@ class TaskDetailsScreen extends StatelessWidget {
                                 label: 'Accepted',
                                 onPressed: null,
                               )
-                            else if (task.pendingAcceptanceByUserId != null)
+                            else if (task.pendingAcceptanceByUserId != null &&
+                                userId != null)
                               AppButton(
                                 label: 'Acceptance pending',
                                 onPressed: null,

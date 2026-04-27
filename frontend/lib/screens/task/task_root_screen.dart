@@ -29,6 +29,7 @@ class _TaskRootScreenState extends State<TaskRootScreen> {
     final pages = [
       HomeScreen(
         taskProvider: widget.taskProvider,
+        authProvider: widget.authProvider,
         showAppBar: false,
         showCreateShortcut: false,
       ),

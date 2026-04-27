@@ -1,14 +1,26 @@
+import 'dart:convert';
+
 import 'package:frontend/models/user_model.dart';
 import 'package:frontend/services/api_service.dart';
+import 'package:frontend/services/auth_session_storage.dart';
+import 'package:frontend/services/auth_session_storage_base.dart';
 
 class AuthService {
-  AuthService({ApiService? apiService})
-      : _apiService = apiService ?? ApiService();
+  AuthService({
+    ApiService? apiService,
+    AuthSessionStorage? sessionStorage,
+  })  : _apiService = apiService ?? ApiService(),
+        _sessionStorage = sessionStorage ?? createAuthSessionStorage() {
+    _restoreSessionFromStorage();
+  }
 
   final ApiService _apiService;
+  final AuthSessionStorage _sessionStorage;
 
   static List<Map<String, dynamic>> _userStore = const [];
   static String? _sessionUserId;
+  static const String _sessionUserIdKey = 'northbridge.session.userId';
+  static const String _sessionUserKey = 'northbridge.session.user';
 
   UserModel? _currentUser;
 
@@ -20,8 +32,10 @@ class AuthService {
 
   void clearSessionToken() {
     _sessionUserId = null;
+    _currentUser = null;
     ApiService.setGlobalBearerToken(null);
     ApiService.setGlobalAuthOverrideHeaders(null);
+    _clearPersistedSession();
   }
 
   Future<String?> getIdToken({bool forceRefresh = false}) async {
@@ -48,6 +62,46 @@ class AuthService {
       if (user.name.trim().isNotEmpty) 'X-User-Name': user.name.trim(),
     });
     _upsertUserStore(user);
+    _persistSessionUser(user);
+  }
+
+  void _restoreSessionFromStorage() {
+    final inMemorySessionUserId = _sessionUserId;
+    if (inMemorySessionUserId != null && inMemorySessionUserId.trim().isNotEmpty) {
+      _restoreSessionHeaders();
+      return;
+    }
+
+    final storedUserId = _sessionStorage.read(_sessionUserIdKey)?.trim();
+    final storedUserJson = _sessionStorage.read(_sessionUserKey)?.trim();
+    if (storedUserId == null || storedUserId.isEmpty) {
+      return;
+    }
+
+    _sessionUserId = storedUserId;
+
+    if (storedUserJson != null && storedUserJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(storedUserJson);
+        if (decoded is Map<String, dynamic>) {
+          final restoredUser = UserModel.fromJson(decoded);
+          _currentUser = restoredUser;
+          _upsertUserStore(restoredUser);
+        }
+      } catch (_) {}
+    }
+
+    _restoreSessionHeaders();
+  }
+
+  void _persistSessionUser(UserModel user) {
+    _sessionStorage.write(_sessionUserIdKey, user.id);
+    _sessionStorage.write(_sessionUserKey, jsonEncode(user.toJson()));
+  }
+
+  void _clearPersistedSession() {
+    _sessionStorage.remove(_sessionUserIdKey);
+    _sessionStorage.remove(_sessionUserKey);
   }
 
   void _restoreSessionHeaders() {
@@ -73,6 +127,7 @@ class AuthService {
   }
 
   Future<UserModel?> getCurrentUser() async {
+    _restoreSessionFromStorage();
     if (_sessionUserId == null || _sessionUserId!.trim().isEmpty) {
       _currentUser = null;
       return null;

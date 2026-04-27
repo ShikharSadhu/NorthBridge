@@ -44,7 +44,10 @@ class AppRoutes {
             taskProvider: taskProvider,
             authProvider: authProvider,
           ),
-      home: (_) => HomeScreen(taskProvider: taskProvider),
+      home: (_) => HomeScreen(
+            taskProvider: taskProvider,
+            authProvider: authProvider,
+          ),
       auth: (_) => AuthScreen(authProvider: authProvider),
       chat: (_) => ChatListScreen(
             chatProvider: chatProvider,

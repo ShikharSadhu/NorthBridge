@@ -11,10 +11,12 @@ class TaskCard extends StatelessWidget {
   const TaskCard({
     super.key,
     required this.task,
+    this.currentUserId,
     this.onTap,
   });
 
   final TaskModel task;
+  final String? currentUserId;
   final VoidCallback? onTap;
 
   @override
@@ -37,7 +39,8 @@ class TaskCard extends StatelessWidget {
                   ),
                 ),
                 if (task.acceptedByUserId != null ||
-                    task.pendingAcceptanceByUserId != null)
+                    (currentUserId != null &&
+                        task.pendingAcceptanceByUserId == currentUserId))
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
