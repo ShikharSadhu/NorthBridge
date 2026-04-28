@@ -16,6 +16,11 @@ Key folders at the repo root:
 - `scripts/` helper scripts for local workflows
 - `docs/` architecture and contract documentation
 
+## Live Deployed
+
+The website is Live on: https://north-bridge.netlify.app/
+Check it out!
+
 ## Quick start (full stack)
 
 From the repository root:
